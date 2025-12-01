@@ -1,0 +1,498 @@
+[
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "RICOAUTO",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 113.59,
+    "stop_loss": 112.79487,
+    "target": 115.29384999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 6.66,
+      "volume": 9469831,
+      "avg_volume": 9469831
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "UNIVASTU",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 71.5,
+    "stop_loss": 70.9995,
+    "target": 72.57249999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 6.07,
+      "volume": 24698,
+      "avg_volume": 24698
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "BANSALWIRE",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 330.3,
+    "stop_loss": 327.9879,
+    "target": 335.2545,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 5.53,
+      "volume": 164350,
+      "avg_volume": 164350
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "LCCINFOTEC",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 5.58,
+    "stop_loss": 5.54094,
+    "target": 5.6636999999999995,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 4.89,
+      "volume": 113149,
+      "avg_volume": 113149
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "NOIDATOLL",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 4.74,
+    "stop_loss": 4.7068200000000004,
+    "target": 4.8111,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 4.87,
+      "volume": 102324,
+      "avg_volume": 102324
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "GMRAIRPORT",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 107.95,
+    "stop_loss": 107.19435,
+    "target": 109.56925,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 1.18,
+      "volume": 4764596,
+      "avg_volume": 4764596
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "TECHM",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 1522.8,
+    "stop_loss": 1512.1404,
+    "target": 1545.6419999999998,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 0.86,
+      "volume": 270634,
+      "avg_volume": 270634
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "LTIM",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 6054.0,
+    "stop_loss": 6011.622,
+    "target": 6144.8099999999995,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 0.47,
+      "volume": 59720,
+      "avg_volume": 59720
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:14:00.007499",
+    "symbol": "TCS",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 3143.3,
+    "stop_loss": 3121.2969000000003,
+    "target": 3190.4494999999997,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 0.21,
+      "volume": 310597,
+      "avg_volume": 310597
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:15:00.007295",
+    "symbol": "LCCINFOTEC",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 5.58,
+    "stop_loss": 5.54094,
+    "target": 5.6636999999999995,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 4.89,
+      "volume": 113149,
+      "avg_volume": 113149
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:15:00.007295",
+    "symbol": "NOIDATOLL",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 4.74,
+    "stop_loss": 4.7068200000000004,
+    "target": 4.8111,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 4.87,
+      "volume": 136448,
+      "avg_volume": 136448
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:16:00.000838",
+    "symbol": "WIPL",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 173.48,
+    "stop_loss": 172.26564,
+    "target": 176.08219999999997,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 6.92,
+      "volume": 1498,
+      "avg_volume": 1498
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:17:00.007872",
+    "symbol": "WIPL",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 178.0,
+    "stop_loss": 176.754,
+    "target": 180.67,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 9.71,
+      "volume": 2190,
+      "avg_volume": 2190
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:17:00.007872",
+    "symbol": "UNIVASTU",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 71.6,
+    "stop_loss": 71.0988,
+    "target": 72.67399999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 6.22,
+      "volume": 28694,
+      "avg_volume": 28694
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:17:00.007872",
+    "symbol": "GMRAIRPORT",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 107.9,
+    "stop_loss": 107.1447,
+    "target": 109.51849999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 1.13,
+      "volume": 5885934,
+      "avg_volume": 5885934
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:18:00.004863",
+    "symbol": "WIPL",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 175.41,
+    "stop_loss": 174.18213,
+    "target": 178.04115,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 8.11,
+      "volume": 2295,
+      "avg_volume": 2295
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:18:00.004863",
+    "symbol": "UNIVASTU",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 71.59,
+    "stop_loss": 71.08887,
+    "target": 72.66385,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 6.2,
+      "volume": 29236,
+      "avg_volume": 29236
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:18:00.004863",
+    "symbol": "MASTERTR",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 122.89,
+    "stop_loss": 122.02977,
+    "target": 124.73334999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 5.59,
+      "volume": 547295,
+      "avg_volume": 547295
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:18:00.004863",
+    "symbol": "TEXINFRA",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 107.9,
+    "stop_loss": 107.1447,
+    "target": 109.51849999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 5.33,
+      "volume": 231577,
+      "avg_volume": 231577
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:18:00.004863",
+    "symbol": "GMRAIRPORT",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 107.91,
+    "stop_loss": 107.15463,
+    "target": 109.52864999999998,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 1.14,
+      "volume": 5970245,
+      "avg_volume": 5970245
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:18:00.004863",
+    "symbol": "COFORGE",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 1928.5,
+    "stop_loss": 1915.0004999999999,
+    "target": 1957.4274999999998,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 0.96,
+      "volume": 728805,
+      "avg_volume": 728805
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:19:00.003395",
+    "symbol": "WIPL",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 176.0,
+    "stop_loss": 174.768,
+    "target": 178.64,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 8.47,
+      "volume": 2323,
+      "avg_volume": 2323
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:19:00.003395",
+    "symbol": "RICOAUTO",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 113.6,
+    "stop_loss": 112.8048,
+    "target": 115.30399999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 6.67,
+      "volume": 10461448,
+      "avg_volume": 10461448
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:19:00.003395",
+    "symbol": "UNIVASTU",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 71.54,
+    "stop_loss": 71.03922,
+    "target": 72.6131,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 6.13,
+      "volume": 29237,
+      "avg_volume": 29237
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:19:00.003395",
+    "symbol": "MASTERTR",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 123.5,
+    "stop_loss": 122.6355,
+    "target": 125.35249999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 6.12,
+      "volume": 566967,
+      "avg_volume": 566967
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:19:00.003395",
+    "symbol": "TEXINFRA",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 108.11,
+    "stop_loss": 107.35323,
+    "target": 109.73164999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 5.53,
+      "volume": 252633,
+      "avg_volume": 252633
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:19:00.003395",
+    "symbol": "KSB",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 780.7,
+    "stop_loss": 775.2351,
+    "target": 792.4105,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 5.27,
+      "volume": 1093856,
+      "avg_volume": 1093856
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:19:00.003395",
+    "symbol": "GMRAIRPORT",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 108.08,
+    "stop_loss": 107.32343999999999,
+    "target": 109.70119999999999,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 1.3,
+      "volume": 6242926,
+      "avg_volume": 6242926
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:19:00.003395",
+    "symbol": "COFORGE",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 1928.6,
+    "stop_loss": 1915.0998,
+    "target": 1957.5289999999998,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 0.96,
+      "volume": 733239,
+      "avg_volume": 733239
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:20:00.004507",
+    "symbol": "WIPL",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 176.0,
+    "stop_loss": 174.768,
+    "target": 178.64,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 8.47,
+      "volume": 2323,
+      "avg_volume": 2323
+    }
+  },
+  {
+    "timestamp": "2025-11-28T10:21:00.005281",
+    "symbol": "TCIFINANCE",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 11.28,
+    "stop_loss": 11.201039999999999,
+    "target": 11.449199999999998,
+    "quantity": 1,
+    "reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 3.87,
+      "volume": 1234,
+      "avg_volume": 1234
+    }
+  }
+]
