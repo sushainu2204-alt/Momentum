@@ -213,7 +213,8 @@ class SyncJobsScheduler:
         """
         Job 4: Monitor positions and check exit conditions.
         
-        Checks SL/Target/Time exits and places exit orders.
+        Places exit orders when needed, but DB closure happens via sync.
+        Position records are closed ONLY when Kite confirms position is closed.
         """
         if not self._is_market_hours():
             logger.debug("Outside market hours - skipping position monitoring")
@@ -224,15 +225,15 @@ class SyncJobsScheduler:
             
             current_time = datetime.now()
             
-            # Check if it's time to exit all positions (3:20 PM)
+            # Check if it's time to exit all positions (3:15 PM - before Zerodha's 3:20 PM auto square-off)
             if self.signal_executor.should_exit_all_positions(current_time):
-                logger.info("🔔 Auto-exit time reached - exiting all positions")
+                logger.info("🔔 Auto-exit time reached (3:15 PM) - placing exit orders (before Zerodha's 3:20 PM square-off)")
                 
-                # Get all open positions
+                # Get all open positions from Kite (not DB - source of truth)
                 positions = await self.position_manager.get_open_positions()
                 
                 if positions:
-                    logger.info(f"Exiting {len(positions)} open positions")
+                    logger.info(f"Placing exit orders for {len(positions)} open positions")
                     
                     # Generate exit signals for all positions
                     exit_signals = []
@@ -246,27 +247,27 @@ class SyncJobsScheduler:
                             stop_loss=0,  # Not relevant for exit
                             target=0,     # Not relevant for exit
                             quantity=abs(pos['quantity']),
-                            reason="Time-based exit (3:20 PM)",
+                            reason="Time-based exit (3:15 PM - before auto square-off)",
                             timestamp=current_time
                         )
                         exit_signals.append(exit_signal)
                     
-                    # Execute exit signals
+                    # Execute exit signals (places orders on Kite)
                     results = await self.signal_executor.execute_exit_signals(
                         exit_signals,
                         strategy_name="AUTO_EXIT"
                     )
                     
                     executed = sum(1 for r in results if r.status == "EXECUTED")
-                    logger.info(f"✅ Executed {executed}/{len(exit_signals)} exit orders")
+                    logger.info(f"✅ Placed {executed}/{len(exit_signals)} exit orders")
+                    logger.info(f"⏳ Position records will be closed when Kite confirms exits (next sync)")
                 else:
                     logger.info("No open positions to exit")
             
-            else:
-                # Normal monitoring - just sync positions
-                # Exchange handles SL/Target via bracket orders automatically
-                logger.debug("Syncing positions (SL/Target handled by exchange)")
-                await self.position_manager.sync_positions_from_kite()
+            # Always sync positions to update P&L and detect closures
+            # This will close DB positions when Kite shows quantity=0
+            logger.debug("Syncing positions from Kite (updates P&L, detects closures)")
+            await self.position_manager.sync_positions_from_kite()
             
             logger.debug("✅ Position monitoring completed")
             

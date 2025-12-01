@@ -1,7 +1,9 @@
 # Maintenance Tasks & Reminders
 
 TODO:
-1. Why are we fetching only top 20 gainers???
+1. SHould we use webhook callss to update orders insated of syncing???
+2. Positions automated right now -- test it clearly
+3. We should be running sync jobs always -- we need to etter script to automatically run them
 
 ## Recurring Tasks
 

@@ -7,9 +7,14 @@ Designed for easy migration from file storage to database storage.
 File Structure:
 - signals/
   - YYYY-MM-DD/
-    - vwap_breakout_signals.json
+    - vwap_breakout_signals.json       (all signals generated)
     - bullish_flag_signals.json
     - vwap_ema_breakout_signals.json
+- orders/
+  - YYYY-MM-DD/
+    - vwap_breakout_orders.json        (only executed orders)
+    - bullish_flag_orders.json
+    - vwap_ema_breakout_orders.json
 
 Each signal is stored with:
 - timestamp
@@ -28,7 +33,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import logging
 
 from backend.models import Signal
@@ -46,23 +51,27 @@ class SignalStorage:
     Default: file-based (easy to migrate to DB later)
     """
     
-    def __init__(self, storage_type: str = "file", base_path: str = "./signals", database: Optional[IDatabase] = None):
+    def __init__(self, storage_type: str = "file", base_path: str = "./signals", orders_path: str = "./orders", database: Optional[IDatabase] = None):
         """
         Initialize signal storage.
         
         Args:
             storage_type: 'file' or 'database'
             base_path: Base directory for file storage
+            orders_path: Base directory for orders storage
             database: Database instance (required if storage_type='database')
         """
         self.storage_type = storage_type
         self.base_path = Path(base_path)
+        self.orders_path = Path(orders_path)
         self.database = database
         self.repository = SignalRepository(database) if database else None
         
         if storage_type == "file":
             self.base_path.mkdir(parents=True, exist_ok=True)
+            self.orders_path.mkdir(parents=True, exist_ok=True)
             logger.info(f"Signal storage initialized: {self.base_path}")
+            logger.info(f"Orders storage initialized: {self.orders_path}")
         elif storage_type == "database":
             if not database:
                 raise ValueError("Database instance required when storage_type='database'")
@@ -236,3 +245,61 @@ class SignalStorage:
         
         logger.info(f"📄 Daily report exported: {filename}")
         return filename
+    
+    def save_executed_order(
+        self,
+        signal: Signal,
+        strategy_name: str,
+        order_id: Optional[str],
+        quantity: int,
+        execution_result: Dict[str, Any]
+    ):
+        """
+        Save executed order to separate orders file.
+        
+        Args:
+            signal: Original signal
+            strategy_name: Strategy identifier
+            order_id: Kite order ID (None in dry run)
+            quantity: Executed quantity
+            execution_result: Result from signal executor (status, reason, etc.)
+        """
+        # Create date directory
+        date_str = signal.timestamp.strftime("%Y-%m-%d")
+        date_dir = self.orders_path / date_str
+        date_dir.mkdir(parents=True, exist_ok=True)
+        
+        # File path
+        filename = f"{strategy_name}_orders.json"
+        filepath = date_dir / filename
+        
+        # Load existing orders
+        orders = []
+        if filepath.exists():
+            with open(filepath, 'r') as f:
+                orders = json.load(f)
+        
+        # Prepare order data
+        order_data = {
+            "timestamp": signal.timestamp.isoformat(),
+            "symbol": signal.symbol,
+            "instrument_token": signal.instrument_token,
+            "signal_type": signal.signal_type.value,
+            "price": signal.price,
+            "stop_loss": signal.stop_loss,
+            "target": signal.target,
+            "quantity": quantity,
+            "order_id": order_id,
+            "execution_status": execution_result.get("status"),
+            "execution_reason": execution_result.get("reason"),
+            "signal_reason": signal.reason,
+            "metadata": execution_result.get("metadata", {})
+        }
+        
+        # Append and save
+        orders.append(order_data)
+        
+        with open(filepath, 'w') as f:
+            json.dump(orders, f, indent=2)
+        
+        logger.info(f"✅ Order saved: {strategy_name} - {signal.symbol} @ {signal.price:.2f} (Order ID: {order_id})")

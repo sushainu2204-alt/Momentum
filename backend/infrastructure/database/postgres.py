@@ -90,7 +90,7 @@ class PostgresDatabase(IDatabase):
         Fetch single record.
         
         Args:
-            query: SQL query
+            query: SQL query with :param placeholders
             params: Query parameters
         
         Returns:
@@ -101,7 +101,13 @@ class PostgresDatabase(IDatabase):
         
         async with self.pool.acquire() as conn:
             if params:
-                row = await conn.fetchrow(query, *params.values())
+                # Convert :named parameters to $1, $2, etc.
+                converted_query = query
+                param_values = []
+                for i, (key, value) in enumerate(params.items(), 1):
+                    converted_query = converted_query.replace(f":{key}", f"${i}")
+                    param_values.append(value)
+                row = await conn.fetchrow(converted_query, *param_values)
             else:
                 row = await conn.fetchrow(query)
             
@@ -112,7 +118,7 @@ class PostgresDatabase(IDatabase):
         Fetch all records.
         
         Args:
-            query: SQL query
+            query: SQL query with :param placeholders
             params: Query parameters
         
         Returns:
@@ -123,7 +129,13 @@ class PostgresDatabase(IDatabase):
         
         async with self.pool.acquire() as conn:
             if params:
-                rows = await conn.fetch(query, *params.values())
+                # Convert :named parameters to $1, $2, etc.
+                converted_query = query
+                param_values = []
+                for i, (key, value) in enumerate(params.items(), 1):
+                    converted_query = converted_query.replace(f":{key}", f"${i}")
+                    param_values.append(value)
+                rows = await conn.fetch(converted_query, *param_values)
             else:
                 rows = await conn.fetch(query)
             
@@ -140,11 +152,28 @@ class PostgresDatabase(IDatabase):
         Returns:
             Inserted record ID
         """
+        import json
+        from datetime import datetime, date
+        
         if not self.pool:
             raise RuntimeError("Database not connected")
         
-        columns = ", ".join(data.keys())
-        placeholders = ", ".join(f"${i+1}" for i in range(len(data)))
+        # JSON encoder for datetime objects
+        def json_serial(obj):
+            if isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+        
+        # Convert dict values to JSON strings for JSONB columns
+        processed_data = {}
+        for key, value in data.items():
+            if isinstance(value, dict):
+                processed_data[key] = json.dumps(value, default=json_serial)
+            else:
+                processed_data[key] = value
+        
+        columns = ", ".join(processed_data.keys())
+        placeholders = ", ".join(f"${i+1}" for i in range(len(processed_data)))
         query = f"""
             INSERT INTO {table} ({columns})
             VALUES ({placeholders})
@@ -152,7 +181,7 @@ class PostgresDatabase(IDatabase):
         """
         
         async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(query, *data.values())
+            row = await conn.fetchrow(query, *processed_data.values())
             return row['id'] if row else None
     
     async def update(self, table: str, data: Dict, where: Dict) -> Any:

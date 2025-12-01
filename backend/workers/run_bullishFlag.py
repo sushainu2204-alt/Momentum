@@ -34,14 +34,8 @@ from backend.workers.bullish_flag_worker import BullishFlagWorker
 from backend.workers.vwap_ema_breakout_worker import VWAPEMABreakoutWorker
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(f'all_workers_{datetime.now().strftime("%Y%m%d")}.log'),
-        logging.StreamHandler()
-    ]
-)
+from backend.core.logging_config import setup_logging
+setup_logging('all_workers')
 logger = logging.getLogger(__name__)
 
 

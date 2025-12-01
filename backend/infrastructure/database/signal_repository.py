@@ -8,7 +8,7 @@ import json
 import logging
 
 from .base import IDatabase
-from models import Signal
+from backend.core.models.signal import Signal
 
 logger = logging.getLogger(__name__)
 

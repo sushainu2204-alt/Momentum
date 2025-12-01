@@ -38,17 +38,10 @@ from backend.infrastructure.data_sources import ZerodhaDataSource
 from backend.core.services.kite_service import KiteService
 from backend.infrastructure.database.postgres import PostgresDatabase
 from backend.models import Candidate, Signal
+from backend.core.logging_config import setup_logging
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(f'strategy_worker_{datetime.now().strftime("%Y%m%d")}.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+logger = setup_logging('strategy_worker')
 
 
 class BaseStrategyWorker(ABC):
@@ -108,12 +101,12 @@ class BaseStrategyWorker(ABC):
         self.strategy = self.create_strategy()
         
         # Initialize signal storage (always available for backup)
-        self.signal_storage = SignalStorage(storage_type="file", base_path="./signals")
+        self.signal_storage = SignalStorage(storage_type="file", base_path="./signals", orders_path="./orders")
         
         # Initialize execution components (if enabled)
         self.signal_executor = None
-        if use_execution:
-            self._initialize_execution_services()
+        self.database = None
+        self._execution_services_initialized = False
         
         # Signal counter
         self.signals_generated = 0
@@ -156,12 +149,36 @@ class BaseStrategyWorker(ABC):
         """
         pass
     
+    def get_trading_limits(self):
+        """
+        Get trading limits for CapitalManager.
+        
+        Override this in subclasses to customize limits.
+        Default: None (CapitalManager uses its default TradingLimits)
+        
+        Returns:
+            TradingLimits instance or None
+        """
+        return None  # Use CapitalManager defaults
+    
+    def get_mock_capital(self) -> Optional[float]:
+        """
+        Get mock capital for paper trading.
+        
+        Override this in subclasses for paper trading workers.
+        Default: None (use live Kite API)
+        
+        Returns:
+            Mock capital amount or None for live trading
+        """
+        return None  # Live mode - use Kite API
+    
     # ================================================================
     # EXECUTION SERVICES INITIALIZATION
     # ================================================================
     
-    def _initialize_execution_services(self):
-        """Initialize order execution services"""
+    async def _initialize_execution_services(self):
+        """Initialize execution services"""
         try:
             logger.info("Initializing execution services...")
             
@@ -174,8 +191,8 @@ class BaseStrategyWorker(ABC):
                 "password": "secret"
             }
             self.database = PostgresDatabase(db_config)
-            asyncio.create_task(self.database.connect())
-            logger.info("✅ Database initialized")
+            await self.database.connect()
+            logger.info("✅ Database connected")
             
             # Initialize managers
             from backend.infrastructure.database.order_repository import OrderRepository
@@ -196,19 +213,23 @@ class BaseStrategyWorker(ABC):
             )
             logger.info("✅ PositionManager initialized")
             
+            # Initialize CapitalManager with default limits
+            # Subclasses can override get_trading_limits() and get_mock_capital() for custom behavior
             from backend.core.services.capital_manager import TradingLimits
-            limits = TradingLimits(
-                max_positions=5,
-                position_size_pct=20,
-                risk_per_trade_pct=2
-            )
+            
+            limits = self.get_trading_limits()
+            mock_capital = self.get_mock_capital()
+            
             self.capital_manager = CapitalManager(
                 database=self.database,
                 kite_service=self.kite_service,
                 position_manager=self.position_manager,
-                limits=limits
+                limits=limits,
+                mock_capital=mock_capital
             )
-            logger.info("✅ CapitalManager initialized")
+            
+            mode_info = f"mock_capital=₹{mock_capital:,.2f}" if mock_capital else "live_mode"
+            logger.info(f"✅ CapitalManager initialized ({mode_info})")
             
             # Initialize signal executor
             self.signal_executor = SignalExecutor(
@@ -255,6 +276,11 @@ class BaseStrategyWorker(ABC):
     
     async def scan_job(self):
         """Job to scan market (runs every minute)"""
+        # Initialize execution services on first run (async initialization)
+        if self.use_execution and not self._execution_services_initialized:
+            await self._initialize_execution_services()
+            self._execution_services_initialized = True
+        
         current_time = datetime.now()
         
         # Check if we're within market scanning hours (9:16 AM - 3:20 PM)
@@ -456,7 +482,16 @@ class BaseStrategyWorker(ABC):
                     # Prepare metadata
                     metadata = self._prepare_metadata(candidate, stock_df)
                     
-                    # Execute signal (if execution enabled) or save to file
+                    # Save signal to file (always save for record-keeping)
+                    await self.signal_storage.save_signal(
+                        signal,
+                        self.get_strategy_name(),
+                        metadata
+                    )
+                    
+                    self.signals_generated += 1
+                    
+                    # Execute signal if execution enabled
                     if self.use_execution and self.signal_executor:
                         # Execute via SignalExecutor (with guardrails)
                         result = await self.signal_executor.execute_signal(
@@ -465,10 +500,22 @@ class BaseStrategyWorker(ABC):
                             metadata=metadata
                         )
                         
-                        self.signals_generated += 1
-                        
                         if result.status == "EXECUTED":
                             self.signals_executed += 1
+                            
+                            # Save executed order to separate file
+                            self.signal_storage.save_executed_order(
+                                signal=signal,
+                                strategy_name=self.get_strategy_name(),
+                                order_id=result.order_id,
+                                quantity=result.quantity,
+                                execution_result={
+                                    "status": result.status,
+                                    "reason": result.reason,
+                                    "metadata": metadata
+                                }
+                            )
+                            
                             logger.info(
                                 f"✅ ORDER PLACED: {signal.symbol} x{result.quantity} @ ₹{signal.price:.2f}, "
                                 f"SL: ₹{signal.stop_loss:.2f}, Target: ₹{signal.target:.2f}, "
@@ -484,15 +531,7 @@ class BaseStrategyWorker(ABC):
                                 f"❌ EXECUTION FAILED: {signal.symbol} - {result.reason} - {result.error}"
                             )
                     else:
-                        # Just save signal to file (old behavior)
-                        await self.signal_storage.save_signal(
-                            signal,
-                            self.get_strategy_name(),
-                            metadata
-                        )
-                        
-                        self.signals_generated += 1
-                        
+                        # No execution - just log that signal was saved
                         logger.info(
                             f"📈 SIGNAL SAVED: {signal.symbol} @ ₹{signal.price:.2f}, "
                             f"SL: ₹{signal.stop_loss:.2f}, "

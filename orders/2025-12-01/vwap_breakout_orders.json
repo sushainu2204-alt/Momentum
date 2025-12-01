@@ -1,0 +1,135 @@
+[
+  {
+    "timestamp": "2025-12-01T14:59:18.135320",
+    "symbol": "CORALFINAC",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 44.45,
+    "stop_loss": 44.138850000000005,
+    "target": 45.116749999999996,
+    "quantity": 44,
+    "order_id": null,
+    "execution_status": "EXECUTED",
+    "execution_reason": "Order placed (DRY RUN)",
+    "signal_reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 11.85,
+      "volume": 204873,
+      "avg_volume": 204873
+    }
+  },
+  {
+    "timestamp": "2025-12-01T14:59:18.135320",
+    "symbol": "ONEPOINT",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 56.92,
+    "stop_loss": 56.52156,
+    "target": 57.773799999999994,
+    "quantity": 35,
+    "order_id": null,
+    "execution_status": "EXECUTED",
+    "execution_reason": "Order placed (DRY RUN)",
+    "signal_reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 7.84,
+      "volume": 4482010,
+      "avg_volume": 4482010
+    }
+  },
+  {
+    "timestamp": "2025-12-01T14:59:18.135320",
+    "symbol": "NOIDATOLL",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 4.97,
+    "stop_loss": 4.93521,
+    "target": 5.044549999999999,
+    "quantity": 402,
+    "order_id": null,
+    "execution_status": "EXECUTED",
+    "execution_reason": "Order placed (DRY RUN)",
+    "signal_reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 4.85,
+      "volume": 143852,
+      "avg_volume": 143852
+    }
+  },
+  {
+    "timestamp": "2025-12-01T14:59:18.135320",
+    "symbol": "GATECH",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 0.6,
+    "stop_loss": 0.5958,
+    "target": 0.6089999999999999,
+    "quantity": 3333,
+    "order_id": null,
+    "execution_status": "EXECUTED",
+    "execution_reason": "Order placed (DRY RUN)",
+    "signal_reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 3.45,
+      "volume": 5991843,
+      "avg_volume": 5991843
+    }
+  },
+  {
+    "timestamp": "2025-12-01T14:59:18.135320",
+    "symbol": "MOKSH",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 14.89,
+    "stop_loss": 14.785770000000001,
+    "target": 15.113349999999999,
+    "quantity": 134,
+    "order_id": null,
+    "execution_status": "EXECUTED",
+    "execution_reason": "Order placed (DRY RUN)",
+    "signal_reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 2.62,
+      "volume": 819268,
+      "avg_volume": 819268
+    }
+  },
+  {
+    "timestamp": "2025-12-01T14:59:18.135320",
+    "symbol": "TECHM",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 1525.3,
+    "stop_loss": 1514.6228999999998,
+    "target": 1548.1794999999997,
+    "quantity": 1,
+    "order_id": null,
+    "execution_status": "EXECUTED",
+    "execution_reason": "Order placed (DRY RUN)",
+    "signal_reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 0.53,
+      "volume": 985828,
+      "avg_volume": 985828
+    }
+  },
+  {
+    "timestamp": "2025-12-01T14:59:18.135320",
+    "symbol": "WIPRO",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 250.15,
+    "stop_loss": 248.39895,
+    "target": 253.90224999999998,
+    "quantity": 7,
+    "order_id": null,
+    "execution_status": "EXECUTED",
+    "execution_reason": "Order placed (DRY RUN)",
+    "signal_reason": "VWAP breakout with volume surge",
+    "metadata": {
+      "gain_pct": 0.25,
+      "volume": 2626734,
+      "avg_volume": 2626734
+    }
+  }
+]

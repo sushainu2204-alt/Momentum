@@ -4,6 +4,7 @@
 
 Clean up and update the documentations if something has changed in the codebase. 
 Do not cretae unncessary run files/test files/documenttaion. Lets keep them crisp and to the point.
+Make sure the files are present in right folders.
 
 Python-based trading system using:
 - **Language**: Python 3.13

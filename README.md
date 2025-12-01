@@ -151,17 +151,60 @@ curl http://localhost:8000/connect
 4. Approve the app
 5. You'll be redirected to `/callback` - access token will be saved to `.env`
 
-### 6. Run Live Worker (Optional)
+### 6. Start the Complete System (Automated) ⭐ **RECOMMENDED**
 
 ```bash
-# Start live strategy worker
-python backend/workers/live_worker.py
+# One-command startup with automated dashboard
+./start_system.sh
 
-# Worker will:
-# - Subscribe to market ticks
-# - Apply Top Gainers Momentum filters
-# - Generate BUY/SELL signals
-# - Track multiple positions
+# This will:
+# - Install tmux if needed (on macOS via Homebrew)
+# - Check all prerequisites
+# - Start Backend API + Sync Jobs
+# - Start Strategy Worker (VWAP Breakout)
+# - Launch monitoring dashboard
+# - Display all components in a 4-pane tmux layout
+```
+
+**Dashboard Layout:**
+```
+┌─────────────────────┬─────────────────────┐
+│ Backend API         │ Strategy Worker     │
+│ + Sync Jobs         │                     │
+├─────────────────────┼─────────────────────┤
+│ System Logs         │ Status Monitor      │
+│                     │                     │
+└─────────────────────┴─────────────────────┘
+```
+
+**Quick Commands:**
+- Navigate panes: `Ctrl-B` + arrow keys
+- Detach session: `Ctrl-B` + `d`
+- Reattach: `tmux attach -t momentum`
+- Stop system: `./stop_system.sh`
+
+**Alternative:** Start specific strategy:
+```bash
+# VWAP Breakout (default)
+./start_system.sh vwap_breakout
+
+# VWAP EMA Breakout
+./start_system.sh vwap_ema
+
+# Multiple strategies
+./start_system.sh multiple
+```
+
+### 6b. Manual Startup (Alternative)
+
+If you prefer manual control:
+
+```bash
+# Terminal 1: Backend API
+uvicorn backend.main:app --reload
+
+# Terminal 2: Strategy Worker
+python backend/workers/run_vwap_breakout_paper_trading.py
 ```
 
 ### 7. Run Backtest

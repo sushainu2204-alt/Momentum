@@ -34,12 +34,14 @@ class VWAPBreakoutWorker(BaseStrategyWorker):
     
     def create_config(self) -> VWAPBreakoutConfig:
         """Create strategy configuration"""
+        from datetime import time
         return VWAPBreakoutConfig(
             volume_multiplier=1.5,
             vwap_breakout_pct=0.2,
             stop_loss_pct=0.7,
             target_pct=1.5,
-            position_size_pct=0.10
+            position_size_pct=0.10,
+            no_entry_after=time(15, 20)  # Allow entries until 3:20 PM for testing
         )
 
 

@@ -232,7 +232,7 @@ Each signal contains:
 Each worker creates detailed logs:
 
 - **Console output**: Real-time monitoring
-- **Log files**: `strategy_worker_YYYYMMDD.log` (individual) or `all_workers_YYYYMMDD.log` (combined)
+- **Log files**: `logs/strategy_worker_YYYYMMDD.log` (individual) or `logs/all_workers_YYYYMMDD.log` (combined)
 
 ## Database Migration (Future)
 

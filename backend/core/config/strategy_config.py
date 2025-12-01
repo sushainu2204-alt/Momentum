@@ -138,7 +138,7 @@ class TopGainersMomentumConfig(BaseStrategyConfig):
     exit_time: time = field(default_factory=lambda: time(15, 20))         # 3:20 PM auto-exit
     
     # Don't enter trades after this time
-    no_entry_after: time = field(default_factory=lambda: time(14, 30))    # 2:30 PM
+    no_entry_after: time = field(default_factory=lambda: time(15, 00))    # 3:00 PM
     
     # ============================================================
     # SCANNING SETTINGS

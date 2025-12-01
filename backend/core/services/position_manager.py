@@ -271,17 +271,36 @@ class PositionManager:
                     
                 else:
                     # Position closed in Kite but still open in DB
-                    # This can happen if manually closed or stop loss hit
-                    logger.warning(
-                        f"Position {symbol} closed in Kite but open in DB - closing"
+                    # Determine exit reason based on last known price
+                    #TODO : Is this right? Are we sure we want to use last known price from DB?
+                    logger.info(
+                        f"Position {symbol} closed in Kite - detecting exit reason and closing DB record"
                     )
                     
-                    # Close with last known price
+                    # Use last known price from DB
+                    exit_price = db_pos['current_price'] or db_pos['entry_price']
+                    
+                    # Detect exit reason by comparing with SL/Target
+                    exit_reason = self._detect_exit_reason(
+                        exit_price=exit_price,
+                        entry_price=db_pos['entry_price'],
+                        stop_loss=db_pos['stop_loss'],
+                        target=db_pos['target']
+                    )
+                    
+                    logger.info(
+                        f"Closing position {symbol}: "
+                        f"Entry=₹{db_pos['entry_price']:.2f}, "
+                        f"Exit=₹{exit_price:.2f}, "
+                        f"Reason={exit_reason}"
+                    )
+                    
+                    # Close position in DB
                     await self.position_repo.close_position(
                         position_id=db_pos['id'],
-                        exit_price=db_pos['current_price'] or db_pos['entry_price'],
+                        exit_price=exit_price,
                         exit_time=datetime.now(),
-                        exit_reason="MANUAL_EXIT"
+                        exit_reason=exit_reason
                     )
                     
                     synced_count += 1
@@ -324,6 +343,47 @@ class PositionManager:
     def _invalidate_cache(self):
         """Clear position cache"""
         self._cache_timestamp = None
+    
+    def _detect_exit_reason(
+        self,
+        exit_price: float,
+        entry_price: float,
+        stop_loss: float,
+        target: float
+    ) -> str:
+        """
+        Detect exit reason based on exit price relative to SL/Target.
+        
+        Args:
+            exit_price: Price at which position was closed
+            entry_price: Original entry price
+            stop_loss: Stop loss price
+            target: Target price
+        
+        Returns:
+            Exit reason: SL_HIT, TARGET_HIT, TIME_EXIT, or MANUAL_EXIT
+        """
+        # Define tolerance (±0.5% to account for slippage)
+        sl_tolerance = abs(stop_loss - entry_price) * 0.05
+        target_tolerance = abs(target - entry_price) * 0.05
+        
+        # Check if exit price is near stop loss
+        if abs(exit_price - stop_loss) <= sl_tolerance:
+            return "SL_HIT"
+        
+        # Check if exit price is near target
+        if abs(exit_price - target) <= target_tolerance:
+            return "TARGET_HIT"
+        
+        # Check current time for time-based exit
+        current_time = datetime.now().time()
+        exit_time = time(15, 15)  # 3:15 PM
+        
+        if current_time >= exit_time:
+            return "TIME_EXIT"
+        
+        # Otherwise, assume manual exit
+        return "MANUAL_EXIT"
     
     # ================================================================
     # STATISTICS

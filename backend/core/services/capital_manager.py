@@ -54,12 +54,14 @@ class CapitalManager:
         database: IDatabase,
         kite_service: Any,  # KiteService instance
         position_manager: PositionManager,
-        limits: Optional[TradingLimits] = None
+        limits: Optional[TradingLimits] = None,
+        mock_capital: Optional[float] = None  # For paper trading - bypass Kite API
     ):
         self.db = database
         self.kite = kite_service
         self.position_manager = position_manager
         self.limits = limits or TradingLimits()
+        self.mock_capital = mock_capital  # If set, use this instead of Kite API
         
         # 2-second cache for margins
         self._margins_cache: Optional[Dict] = None
@@ -78,6 +80,11 @@ class CapitalManager:
         Returns:
             Available capital amount (free cash + collateral)
         """
+        # If mock capital is set (paper trading), use it directly
+        if self.mock_capital is not None:
+            logger.debug(f"Using mock capital: ₹{self.mock_capital:,.2f}")
+            return self.mock_capital
+        
         try:
             margins = await self._get_kite_margins_cached()
             
@@ -104,7 +111,9 @@ class CapitalManager:
             if state:
                 return state['available_capital']
             
-            return self.limits.starting_capital
+            # No data available - cannot trade safely
+            logger.error("No capital data available (Kite failed, DB empty)")
+            return 0.0
             
         except Exception as e:
             logger.error(f"Error getting available capital: {e}")
@@ -112,7 +121,10 @@ class CapitalManager:
             state = await self._get_capital_state()
             if state:
                 return state['available_capital']
-            return self.limits.starting_capital
+            
+            # No data available - return 0 to prevent trading
+            logger.error("Cannot determine available capital - returning 0 to block trading")
+            return 0.0
     
     async def get_current_capital(self) -> float:
         """
@@ -123,6 +135,11 @@ class CapitalManager:
         Returns:
             Current capital
         """
+        # If mock capital is set (paper trading), use it directly
+        if self.mock_capital is not None:
+            logger.debug(f"Using mock capital: ₹{self.mock_capital:,.2f}")
+            return self.mock_capital
+        
         try:
             margins = await self._get_kite_margins_cached()
             
@@ -142,14 +159,19 @@ class CapitalManager:
             if state:
                 return state['current_capital']
             
-            return self.limits.starting_capital
+            # No data available - cannot trade safely
+            logger.error("No capital data available (Kite failed, DB empty)")
+            return 0.0
             
         except Exception as e:
             logger.error(f"Error getting current capital: {e}")
             state = await self._get_capital_state()
             if state:
                 return state['current_capital']
-            return self.limits.starting_capital
+            
+            # No data available - return 0 to prevent trading
+            logger.error("Cannot determine current capital - returning 0 to block trading")
+            return 0.0
     
     async def get_utilized_margin(self) -> float:
         """
@@ -595,11 +617,13 @@ class CapitalManager:
             state = await self._get_capital_state()
             
             if not state:
+                logger.error("No capital data available (Kite failed, DB empty)")
                 return {
-                    "source": "default",
-                    "starting_capital": self.limits.starting_capital,
-                    "current_capital": self.limits.starting_capital,
-                    "available_capital": self.limits.starting_capital,
+                    "source": "unavailable",
+                    "error": "No capital data available",
+                    "starting_capital": 0,
+                    "current_capital": 0,
+                    "available_capital": 0,
                     "capital_in_positions": 0,
                     "total_pnl": 0,
                     "open_positions": 0,

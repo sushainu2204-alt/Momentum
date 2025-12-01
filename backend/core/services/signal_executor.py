@@ -14,6 +14,7 @@ from datetime import datetime, time
 from dataclasses import dataclass
 from enum import Enum
 import logging
+import json
 
 from backend.models import Signal
 from backend.core.services.order_manager import OrderManager
@@ -49,7 +50,7 @@ class TradingHours:
     market_close: time = time(15, 30)
     skip_first_minutes: int = 15  # Skip 9:15-9:30
     skip_last_minutes: int = 15   # Skip 3:15-3:30
-    auto_exit_time: time = time(15, 20)  # Exit all at 3:20 PM
+    auto_exit_time: time = time(15, 15)  # Exit all at 3:15 PM (before Zerodha's 3:20 PM auto square-off)
 
 
 class SignalExecutor:
@@ -348,7 +349,14 @@ class SignalExecutor:
         return True
     
     def should_exit_all_positions(self, current_time: datetime) -> bool:
-        """Check if it's time to exit all positions (3:20 PM)"""
+        """
+        Check if it's time to exit all positions.
+        
+        Exits at 3:15 PM (before Zerodha's 3:20 PM auto square-off for MIS orders).
+        This gives us control over exit execution and avoids forced square-off.
+        
+        TODO: Test this functionality in live trading to verify positions are closed properly
+        """
         return current_time.time() >= self.hours.auto_exit_time
     
     # ================================================================
@@ -371,7 +379,7 @@ class SignalExecutor:
                 AND cooldown_until > $3
                 """,
                 {
-                    "1": signal.symbol,
+                    "1": symbol,
                     "2": strategy_name,
                     "3": datetime.now()
                 }
@@ -435,6 +443,9 @@ class SignalExecutor:
             metadata: Additional metadata
         """
         try:
+            # Debug: Check database connection
+            logger.debug(f"_log_decision called - DB pool status: {self.db.pool is not None if hasattr(self.db, 'pool') else 'N/A'}")
+            
             # Determine action based on result
             if result.status == ExecutionStatus.EXECUTED:
                 action = "ORDER_PLACED"
@@ -444,6 +455,19 @@ class SignalExecutor:
                 action = "EXECUTION_FAILED"
             
             # Build log entry
+            # Prepare data dict with JSON-serializable values
+            data_dict = {
+                "signal": {
+                    "price": signal.price,
+                    "signal_type": signal.signal_type.value if hasattr(signal.signal_type, 'value') else str(signal.signal_type),
+                    "stop_loss": signal.stop_loss,
+                    "target": signal.target,
+                    "reason": signal.reason
+                },
+                "strategy_metadata": metadata,
+                "error": result.error
+            }
+            
             log_data = {
                 "timestamp": datetime.now(),
                 "log_type": action,
@@ -454,19 +478,10 @@ class SignalExecutor:
                 "signal_id": None,
                 "order_id": result.order_id,
                 "position_id": None,
-                "data": {
-                    "signal": {
-                        "price": signal.price,
-                        "signal_type": signal.signal_type,
-                        "stop_loss": signal.stop_loss,
-                        "target": signal.target,
-                        "reason": signal.reason
-                    },
-                    "strategy_metadata": metadata,
-                    "error": result.error
-                }
+                "data": json.dumps(data_dict)  # Convert to JSON string for JSONB column
             }
             
+            logger.debug(f"Attempting to insert log_data for {signal.symbol}: {action}")
             await self.db.insert("trade_logs", log_data)
             
             logger.info(
@@ -475,7 +490,7 @@ class SignalExecutor:
             )
             
         except Exception as e:
-            logger.error(f"Error logging decision: {e}")
+            logger.error(f"Error logging decision: {e}", exc_info=True)
     
     # ================================================================
     # BATCH OPERATIONS
