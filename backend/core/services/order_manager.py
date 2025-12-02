@@ -387,6 +387,45 @@ class OrderManager:
             logger.error(f"Kite order cancellation failed: {e}")
             return False
     
+    async def modify_sl_order(
+        self,
+        order_id: str,
+        new_trigger_price: float,
+        variety: str = "bo"
+    ) -> bool:
+        """
+        Modify a stop loss order trigger price on Kite.
+        
+        Used for trailing stop loss - moves the SL trigger up as price moves favorably.
+        
+        Args:
+            order_id: The SL order ID to modify
+            new_trigger_price: New trigger price for SL
+            variety: Order variety (bo for bracket orders)
+            
+        Returns:
+            True if modification successful
+        """
+        try:
+            kite_variety = (
+                self.kite.kite.VARIETY_BO if variety == "bo" 
+                else self.kite.kite.VARIETY_REGULAR
+            )
+            
+            self.kite.kite.modify_order(
+                variety=kite_variety,
+                order_id=order_id,
+                trigger_price=round(new_trigger_price, 2)
+            )
+            
+            logger.info(f"SL order modified: {order_id} -> trigger ₹{new_trigger_price:.2f}")
+            self._invalidate_cache()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to modify SL order {order_id}: {e}")
+            return False
+    
     async def exit_bracket_order(self, parent_order_id: str) -> bool:
         """
         Exit a bracket order position by cancelling the pending SL/Target orders.

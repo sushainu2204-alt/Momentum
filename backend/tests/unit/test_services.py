@@ -384,3 +384,66 @@ class TestSignalStorage:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ============================================================================
+# TRAILING STOP LOSS SERVICE TESTS (Basic)
+# ============================================================================
+
+class TestTrailingStopLossServiceBasic:
+    """Basic tests for TrailingStopLossService in test_services.py."""
+    
+    @pytest.fixture
+    def trailing_sl_service(self, mock_db):
+        """Create TrailingStopLossService with mocks."""
+        from backend.core.services.trailing_sl_service import (
+            TrailingStopLossService,
+            TrailingStopLossConfig
+        )
+        
+        # Mock position repository
+        position_repo = MagicMock()
+        position_repo.get_open_positions = AsyncMock(return_value=[])
+        position_repo.update_position = AsyncMock()
+        position_repo.update_trailing_stop_loss = AsyncMock()
+        
+        # Mock Kite service
+        kite = MagicMock()
+        kite.kite = MagicMock()
+        kite.kite.positions = MagicMock(return_value={"day": []})
+        kite.kite.modify_order = MagicMock()
+        kite.kite.VARIETY_BO = "bo"
+        
+        return TrailingStopLossService(
+            position_repository=position_repo,
+            kite_service=kite,
+            config=TrailingStopLossConfig()
+        )
+    
+    @pytest.mark.asyncio
+    async def test_process_positions_empty(self, trailing_sl_service):
+        """Test processing when no positions exist."""
+        result = await trailing_sl_service.process_positions()
+        
+        assert result["checked"] == 0
+        assert result["updated"] == 0
+        assert result["errors"] == 0
+    
+    @pytest.mark.asyncio
+    async def test_config_defaults(self, trailing_sl_service):
+        """Test default configuration values."""
+        config = trailing_sl_service.get_config()
+        
+        assert config["enabled"] is True
+        assert config["activation_pct"] == 0.5
+        assert config["trail_pct"] == 0.3
+        assert config["min_sl_move_pct"] == 0.1
+    
+    @pytest.mark.asyncio
+    async def test_disabled_skips_processing(self, trailing_sl_service):
+        """Test that disabled service skips processing."""
+        trailing_sl_service.update_config(enabled=False)
+        
+        result = await trailing_sl_service.process_positions()
+        
+        assert result["checked"] == 0

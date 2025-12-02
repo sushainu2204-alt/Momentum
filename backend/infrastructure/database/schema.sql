@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS positions (
     -- Risk management
     stop_loss DECIMAL(10, 2) NOT NULL,
     target DECIMAL(10, 2) NOT NULL,
+    original_stop_loss DECIMAL(10, 2),   -- Original SL before trailing (NULL if no trailing)
+    highest_price DECIMAL(10, 2),        -- Highest price reached (for trailing SL calculation)
     
     -- Current state
     current_price DECIMAL(10, 2),
@@ -30,12 +32,14 @@ CREATE TABLE IF NOT EXISTS positions (
     exit_price DECIMAL(10, 2),
     exit_time TIMESTAMPTZ,
     exit_reason VARCHAR(50),
-    status VARCHAR(20) DEFAULT 'OPEN',  -- OPEN, TARGET_HIT, SL_HIT, TIME_EXIT, MANUAL_EXIT
+    status VARCHAR(20) DEFAULT 'OPEN',  -- OPEN, TARGET_HIT, SL_HIT, TIME_EXIT, MANUAL_EXIT, TRAILING_SL_HIT
     
     -- Metadata
     signal_id INTEGER,  -- Reference to signals table
     entry_order_id VARCHAR(50),  -- Kite order ID for entry
     exit_order_id VARCHAR(50),   -- Kite order ID for exit
+    sl_order_id VARCHAR(50),     -- Kite order ID for SL order (for modification)
+    target_order_id VARCHAR(50), -- Kite order ID for target order
     metadata JSONB,
     
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,

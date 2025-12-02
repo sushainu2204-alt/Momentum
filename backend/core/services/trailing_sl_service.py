@@ -1,0 +1,290 @@
+"""
+Trailing Stop Loss Service
+
+Monitors positions and updates stop loss as price moves favorably.
+This service implements a trailing stop loss mechanism that:
+1. Tracks the highest price reached for each position
+2. When price moves up by a threshold, moves the SL up
+3. Modifies the SL order on Kite to reflect the new stop loss
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime
+import logging
+
+from backend.infrastructure.database.position_repository import PositionRepository
+from backend.core.services.kite_service import KiteService
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TrailingStopLossConfig:
+    """Configuration for trailing stop loss"""
+    
+    # Enable trailing stop loss
+    enabled: bool = True
+    
+    # Minimum profit % before trailing starts (e.g., 0.5 = start trailing after 0.5% profit)
+    activation_pct: float = 0.5
+    
+    # Trail distance as % of entry price (e.g., 0.3 = SL trails 0.3% below highest price)
+    trail_pct: float = 0.3
+    
+    # Minimum SL move increment (to avoid too frequent updates)
+    min_sl_move_pct: float = 0.1
+
+
+class TrailingStopLossService:
+    """
+    Service to manage trailing stop losses for open positions.
+    
+    How it works:
+    1. For each open position, track the highest price reached
+    2. When current_price > highest_price, update highest_price
+    3. If position is in profit by activation_pct, start trailing
+    4. New SL = highest_price * (1 - trail_pct/100)
+    5. Only update if new SL > current SL (never move SL down)
+    6. Modify the SL order on Kite
+    
+    Example:
+        Entry: ₹100, Initial SL: ₹98 (2% SL)
+        Config: activation_pct=0.5%, trail_pct=0.3%
+        
+        Price moves to ₹101 (+1%):
+        - Profit 1% > activation 0.5%, trailing active
+        - New SL = 101 * (1 - 0.3/100) = ₹100.70
+        - SL moved from ₹98 to ₹100.70 (locked in profit!)
+        
+        Price moves to ₹102:
+        - New SL = 102 * 0.997 = ₹101.69
+        - SL moved up again
+    """
+    
+    def __init__(
+        self,
+        position_repository: PositionRepository,
+        kite_service: KiteService,
+        config: Optional[TrailingStopLossConfig] = None
+    ):
+        self.position_repo = position_repository
+        self.kite = kite_service
+        self.config = config or TrailingStopLossConfig()
+    
+    async def process_positions(self) -> Dict[str, int]:
+        """
+        Process all open positions and update trailing stop losses.
+        
+        Returns:
+            Dict with counts: {"checked": N, "updated": N, "errors": N}
+        """
+        if not self.config.enabled:
+            logger.debug("Trailing SL disabled, skipping")
+            return {"checked": 0, "updated": 0, "errors": 0}
+        
+        stats = {"checked": 0, "updated": 0, "errors": 0}
+        
+        try:
+            # Get all open positions from DB
+            open_positions = await self.position_repo.get_open_positions()
+            
+            if not open_positions:
+                logger.debug("No open positions to process for trailing SL")
+                return stats
+            
+            logger.debug(f"Processing {len(open_positions)} positions for trailing SL")
+            
+            # Get current prices from Kite
+            kite_positions = self._get_kite_positions()
+            kite_price_map = {p['tradingsymbol']: p['last_price'] for p in kite_positions}
+            
+            for position in open_positions:
+                stats["checked"] += 1
+                
+                try:
+                    result = await self._process_single_position(position, kite_price_map)
+                    if result:
+                        stats["updated"] += 1
+                except Exception as e:
+                    logger.error(f"Error processing trailing SL for {position['symbol']}: {e}")
+                    stats["errors"] += 1
+            
+            if stats["updated"] > 0:
+                logger.info(
+                    f"Trailing SL: Checked {stats['checked']}, "
+                    f"Updated {stats['updated']}, Errors {stats['errors']}"
+                )
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Error in trailing SL processing: {e}", exc_info=True)
+            return stats
+    
+    async def _process_single_position(
+        self,
+        position: Dict,
+        kite_price_map: Dict[str, float]
+    ) -> bool:
+        """
+        Process trailing SL for a single position.
+        
+        Returns:
+            True if SL was updated, False otherwise
+        """
+        symbol = position['symbol']
+        position_id = position['id']
+        entry_price = float(position['entry_price'])
+        current_sl = float(position['stop_loss'])
+        
+        # Get current price (prefer Kite, fallback to DB)
+        current_price = kite_price_map.get(symbol)
+        if current_price is None:
+            current_price = float(position.get('current_price') or entry_price)
+        
+        # Get or initialize highest_price
+        highest_price = float(position.get('highest_price') or entry_price)
+        
+        # Update highest price if current price is higher
+        if current_price > highest_price:
+            highest_price = current_price
+            # Update in DB (even if we don't trail yet)
+            await self.position_repo.update_position(
+                position_id=position_id,
+                highest_price=highest_price,
+                current_price=current_price
+            )
+        
+        # Check if we should trail
+        profit_pct = ((current_price - entry_price) / entry_price) * 100
+        
+        if profit_pct < self.config.activation_pct:
+            logger.debug(
+                f"{symbol}: Profit {profit_pct:.2f}% < activation {self.config.activation_pct}%, "
+                f"not trailing yet"
+            )
+            return False
+        
+        # Calculate new trailing SL
+        new_sl = highest_price * (1 - self.config.trail_pct / 100)
+        
+        # Only update if new SL is higher than current SL
+        if new_sl <= current_sl:
+            logger.debug(
+                f"{symbol}: New SL ₹{new_sl:.2f} <= current SL ₹{current_sl:.2f}, no update"
+            )
+            return False
+        
+        # Check minimum move threshold
+        sl_move_pct = ((new_sl - current_sl) / entry_price) * 100
+        if sl_move_pct < self.config.min_sl_move_pct:
+            logger.debug(
+                f"{symbol}: SL move {sl_move_pct:.2f}% < min {self.config.min_sl_move_pct}%, skipping"
+            )
+            return False
+        
+        # Get original SL if this is the first trail
+        original_sl = position.get('original_stop_loss')
+        if original_sl is None:
+            original_sl = current_sl
+        
+        # Update SL in database
+        await self.position_repo.update_trailing_stop_loss(
+            position_id=position_id,
+            new_stop_loss=round(new_sl, 2),
+            highest_price=highest_price,
+            original_stop_loss=original_sl if position.get('original_stop_loss') is None else None
+        )
+        
+        # Modify SL order on Kite (if we have the order ID)
+        sl_order_id = position.get('sl_order_id')
+        if sl_order_id:
+            await self._modify_sl_order_on_kite(sl_order_id, new_sl, position)
+        else:
+            logger.warning(
+                f"{symbol}: No SL order ID stored, can't modify order on Kite. "
+                f"DB updated but Kite order unchanged."
+            )
+        
+        logger.info(
+            f"📈 TRAILING SL: {symbol} - "
+            f"Entry: ₹{entry_price:.2f}, High: ₹{highest_price:.2f}, "
+            f"SL: ₹{current_sl:.2f} → ₹{new_sl:.2f} (+{sl_move_pct:.2f}%)"
+        )
+        
+        return True
+    
+    async def _modify_sl_order_on_kite(
+        self,
+        sl_order_id: str,
+        new_trigger_price: float,
+        position: Dict
+    ):
+        """
+        Modify the SL order on Kite with new trigger price.
+        
+        For bracket orders, we need to modify the SL leg.
+        """
+        try:
+            # For bracket orders, use VARIETY_BO
+            # The trigger_price is the SL trigger for SL-M orders
+            self.kite.kite.modify_order(
+                variety=self.kite.kite.VARIETY_BO,
+                order_id=sl_order_id,
+                trigger_price=round(new_trigger_price, 2)
+            )
+            
+            logger.info(f"✅ SL order modified on Kite: {sl_order_id} -> ₹{new_trigger_price:.2f}")
+            
+        except Exception as e:
+            # Log but don't fail - DB is updated, manual intervention may be needed
+            logger.error(
+                f"Failed to modify SL order {sl_order_id} on Kite: {e}. "
+                f"DB updated but Kite order may need manual update."
+            )
+    
+    def _get_kite_positions(self) -> List[Dict]:
+        """Get current positions from Kite"""
+        try:
+            positions_data = self.kite.kite.positions()
+            return positions_data.get('day', [])
+        except Exception as e:
+            logger.error(f"Failed to fetch positions from Kite: {e}")
+            return []
+    
+    # ================================================================
+    # CONFIGURATION METHODS
+    # ================================================================
+    
+    def update_config(
+        self,
+        enabled: Optional[bool] = None,
+        activation_pct: Optional[float] = None,
+        trail_pct: Optional[float] = None,
+        min_sl_move_pct: Optional[float] = None
+    ):
+        """Update trailing SL configuration"""
+        if enabled is not None:
+            self.config.enabled = enabled
+        if activation_pct is not None:
+            self.config.activation_pct = activation_pct
+        if trail_pct is not None:
+            self.config.trail_pct = trail_pct
+        if min_sl_move_pct is not None:
+            self.config.min_sl_move_pct = min_sl_move_pct
+        
+        logger.info(
+            f"Trailing SL config updated: enabled={self.config.enabled}, "
+            f"activation={self.config.activation_pct}%, "
+            f"trail={self.config.trail_pct}%"
+        )
+    
+    def get_config(self) -> Dict:
+        """Get current configuration"""
+        return {
+            "enabled": self.config.enabled,
+            "activation_pct": self.config.activation_pct,
+            "trail_pct": self.config.trail_pct,
+            "min_sl_move_pct": self.config.min_sl_move_pct
+        }

@@ -17,6 +17,7 @@ from backend.core.services.position_manager import PositionManager
 from backend.core.services.capital_manager import CapitalManager
 from backend.core.services.signal_executor import SignalExecutor
 from backend.core.services.kite_service import KiteService
+from backend.core.services.trailing_sl_service import TrailingStopLossService
 from backend.infrastructure.database.factory import create_database
 from backend.core.logging_config import setup_logging
 
@@ -52,6 +53,7 @@ async def main():
     logger.info("  3. Margins Sync      - Every 30 seconds")
     logger.info("  4. Position Monitor  - Every 1 minute (includes EOD exit at 3:15 PM)")
     logger.info("  5. Daily Init        - 9:15 AM (Mon-Fri)")
+    logger.info("  6. Trailing SL       - Every 30 seconds")
     logger.info("")
     logger.info("=" * 80)
     logger.info("")
@@ -98,12 +100,21 @@ async def main():
         )
         logger.info("✓ Signal executor initialized")
         
+        # Trailing stop loss service
+        trailing_sl_service = TrailingStopLossService(
+            position_repository=position_repo,
+            order_manager=order_manager,
+            kite_service=kite_service
+        )
+        logger.info("✓ Trailing SL service initialized")
+        
         # Create scheduler
         scheduler = SyncJobsScheduler(
             order_manager=order_manager,
             position_manager=position_manager,
             capital_manager=capital_manager,
             signal_executor=signal_executor,
+            trailing_sl_service=trailing_sl_service,
             market_open=time(9, 15),
             market_close=time(15, 30)
         )

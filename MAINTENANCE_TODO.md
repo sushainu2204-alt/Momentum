@@ -7,6 +7,7 @@ TODO:
 4. How are we calculating indicators?? Are we even using them now, do we have any libraries?
 5. check bracket order calculation and placing. focus on the timing...
 6. Check if every file is referring to the proper timestamp
+7. TRailing stop loss, check the config, should it be same for all satrategies/workers??
 
 ## Recurring Tasks
 

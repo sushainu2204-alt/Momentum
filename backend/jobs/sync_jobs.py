@@ -21,6 +21,7 @@ from backend.core.services.order_manager import OrderManager
 from backend.core.services.position_manager import PositionManager
 from backend.core.services.capital_manager import CapitalManager
 from backend.core.services.signal_executor import SignalExecutor
+from backend.core.services.trailing_sl_service import TrailingStopLossService
 from backend.core.utils.timezone import now_ist, is_market_hours
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class SyncJobsScheduler:
     3. Margins sync - Every 30 seconds during market hours
     4. Position monitoring - Every 1 minute during market hours
     5. Daily initialization - At market open (9:15 AM)
+    6. Trailing stop loss - Every 30 seconds during market hours
     """
     
     def __init__(
@@ -44,6 +46,7 @@ class SyncJobsScheduler:
         position_manager: PositionManager,
         capital_manager: CapitalManager,
         signal_executor: SignalExecutor,
+        trailing_sl_service: Optional[TrailingStopLossService] = None,
         market_open: time = time(9, 15),
         market_close: time = time(15, 30)
     ):
@@ -51,6 +54,7 @@ class SyncJobsScheduler:
         self.position_manager = position_manager
         self.capital_manager = capital_manager
         self.signal_executor = signal_executor
+        self.trailing_sl_service = trailing_sl_service
         
         self.market_open = market_open
         self.market_close = market_close
@@ -123,6 +127,17 @@ class SyncJobsScheduler:
             max_instances=1,
             coalesce=True
         )
+        
+        # Job 6: Trailing stop loss - Every 30 seconds
+        if self.trailing_sl_service:
+            self.scheduler.add_job(
+                self._trailing_sl_job,
+                trigger=IntervalTrigger(seconds=30),
+                id="trailing_sl",
+                name="Update Trailing Stop Losses",
+                max_instances=1,
+                coalesce=True
+            )
         
         # Start scheduler
         self.scheduler.start()
@@ -270,6 +285,35 @@ class SyncJobsScheduler:
         except Exception as e:
             logger.error(f"Error in daily initialization job: {e}", exc_info=True)
     
+    async def _trailing_sl_job(self):
+        """
+        Job 6: Update trailing stop losses for open positions.
+        
+        Monitors price movements and adjusts stop loss orders on Kite
+        when positions reach configured profit thresholds.
+        """
+        if not self._is_market_hours():
+            logger.debug("Outside market hours - skipping trailing SL update")
+            return
+        
+        if not self.trailing_sl_service:
+            return
+        
+        try:
+            logger.debug("Starting trailing SL job...")
+            result = await self.trailing_sl_service.process_positions()
+            
+            if result["updated"] > 0:
+                logger.info(
+                    f"📈 Trailing SL: {result['updated']} updated, "
+                    f"{result['skipped']} skipped, {result['errors']} errors"
+                )
+            else:
+                logger.debug(f"✅ Trailing SL completed - no updates needed")
+            
+        except Exception as e:
+            logger.error(f"Error in trailing SL job: {e}", exc_info=True)
+    
     # ================================================================
     # HELPER METHODS
     # ================================================================
@@ -286,6 +330,8 @@ class SyncJobsScheduler:
         logger.info(f"  3. Margins Sync      - Every 30 seconds")
         logger.info(f"  4. Position Monitor  - Every 1 minute")
         logger.info(f"  5. Daily Init        - {self.market_open} (Mon-Fri)")
+        if self.trailing_sl_service:
+            logger.info(f"  6. Trailing SL       - Every 30 seconds")
     
     # ================================================================
     # MANUAL TRIGGERS (FOR TESTING)
@@ -315,6 +361,11 @@ class SyncJobsScheduler:
         """Manually trigger daily initialization"""
         logger.info("Manual trigger: Daily initialization")
         await self._daily_initialization_job()
+    
+    async def trigger_trailing_sl(self):
+        """Manually trigger trailing stop loss update"""
+        logger.info("Manual trigger: Trailing stop loss")
+        await self._trailing_sl_job()
     
     # ================================================================
     # STATUS AND MONITORING

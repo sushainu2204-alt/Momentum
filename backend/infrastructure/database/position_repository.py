@@ -32,6 +32,8 @@ class PositionRepository:
         target: float,
         signal_id: Optional[int] = None,
         entry_order_id: Optional[str] = None,
+        sl_order_id: Optional[str] = None,
+        target_order_id: Optional[str] = None,
         metadata: Optional[Dict] = None
     ) -> int:
         """
@@ -50,9 +52,12 @@ class PositionRepository:
             "stop_loss": stop_loss,
             "target": target,
             "current_price": entry_price,
+            "highest_price": entry_price,  # Initialize highest_price to entry
             "status": PositionStatus.OPEN.value,
             "signal_id": signal_id,
             "entry_order_id": entry_order_id,
+            "sl_order_id": sl_order_id,
+            "target_order_id": target_order_id,
             "metadata": metadata or {}
         }
         
@@ -71,7 +76,13 @@ class PositionRepository:
         exit_price: Optional[float] = None,
         exit_time: Optional[datetime] = None,
         exit_reason: Optional[str] = None,
-        exit_order_id: Optional[str] = None
+        exit_order_id: Optional[str] = None,
+        # Trailing SL fields
+        stop_loss: Optional[float] = None,
+        original_stop_loss: Optional[float] = None,
+        highest_price: Optional[float] = None,
+        sl_order_id: Optional[str] = None,
+        target_order_id: Optional[str] = None
     ):
         """Update position fields"""
         updates = {}
@@ -92,6 +103,17 @@ class PositionRepository:
             updates["exit_reason"] = exit_reason
         if exit_order_id is not None:
             updates["exit_order_id"] = exit_order_id
+        # Trailing SL fields
+        if stop_loss is not None:
+            updates["stop_loss"] = stop_loss
+        if original_stop_loss is not None:
+            updates["original_stop_loss"] = original_stop_loss
+        if highest_price is not None:
+            updates["highest_price"] = highest_price
+        if sl_order_id is not None:
+            updates["sl_order_id"] = sl_order_id
+        if target_order_id is not None:
+            updates["target_order_id"] = target_order_id
         
         if updates:
             await self.db.update(
@@ -99,6 +121,42 @@ class PositionRepository:
                 updates,
                 {"id": position_id}
             )
+    
+    async def update_trailing_stop_loss(
+        self,
+        position_id: int,
+        new_stop_loss: float,
+        highest_price: float,
+        original_stop_loss: Optional[float] = None
+    ):
+        """
+        Update trailing stop loss for a position.
+        
+        Args:
+            position_id: Position ID
+            new_stop_loss: New (higher) stop loss price
+            highest_price: Current highest price reached
+            original_stop_loss: Original SL (set only on first trail)
+        """
+        updates = {
+            "stop_loss": new_stop_loss,
+            "highest_price": highest_price
+        }
+        
+        # Set original_stop_loss only if provided (first time trailing)
+        if original_stop_loss is not None:
+            updates["original_stop_loss"] = original_stop_loss
+        
+        await self.db.update(
+            "positions",
+            updates,
+            {"id": position_id}
+        )
+        
+        logger.info(
+            f"Trailing SL updated: Position {position_id}, "
+            f"New SL: ₹{new_stop_loss:.2f}, Highest: ₹{highest_price:.2f}"
+        )
     
     async def get_position(self, position_id: int) -> Optional[Dict]:
         """Get position by ID"""
