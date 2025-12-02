@@ -90,6 +90,76 @@ async def retry_async(
     )
 
 
+def retry_sync(
+    func: Callable[..., T],
+    *args,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    exponential_base: float = 2.0,
+    jitter: bool = True,
+    retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,),
+    on_retry: Optional[Callable[[int, Exception], None]] = None,
+    **kwargs
+) -> T:
+    """
+    Execute a synchronous function with exponential backoff retry.
+    
+    Use this for Kite API calls which are synchronous.
+    
+    Args:
+        func: Sync function to execute
+        *args: Positional arguments for func
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds
+        max_delay: Maximum delay cap in seconds
+        exponential_base: Base for exponential backoff
+        jitter: Add random jitter to prevent thundering herd
+        retryable_exceptions: Tuple of exceptions that trigger retry
+        on_retry: Optional callback called on each retry (attempt, exception)
+        **kwargs: Keyword arguments for func
+        
+    Returns:
+        Result from successful function call
+        
+    Raises:
+        RetryError: If all retries fail
+    """
+    import time
+    last_exception = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            return func(*args, **kwargs)
+        except retryable_exceptions as e:
+            last_exception = e
+            
+            if attempt >= max_retries:
+                break
+            
+            # Calculate delay with exponential backoff
+            delay = min(base_delay * (exponential_base ** attempt), max_delay)
+            
+            # Add jitter (up to 25% of delay)
+            if jitter:
+                delay = delay * (1 + random.uniform(-0.25, 0.25))
+            
+            logger.warning(
+                f"Attempt {attempt + 1}/{max_retries + 1} failed: {e}. "
+                f"Retrying in {delay:.2f}s..."
+            )
+            
+            if on_retry:
+                on_retry(attempt + 1, e)
+            
+            time.sleep(delay)
+    
+    raise RetryError(
+        f"Failed after {max_retries + 1} attempts",
+        last_exception=last_exception
+    )
+
+
 def with_retry(
     max_retries: int = 3,
     base_delay: float = 1.0,
@@ -126,6 +196,18 @@ NETWORK_ERRORS = (
     asyncio.TimeoutError,
 )
 
+# Add requests library exceptions
+try:
+    import requests.exceptions
+    REQUESTS_ERRORS = (
+        requests.exceptions.ReadTimeout,
+        requests.exceptions.ConnectTimeout,
+        requests.exceptions.ConnectionError,
+        requests.exceptions.Timeout,
+    )
+except ImportError:
+    REQUESTS_ERRORS = ()
+
 try:
     import aiohttp
     AIOHTTP_ERRORS = (
@@ -135,6 +217,9 @@ try:
     )
 except ImportError:
     AIOHTTP_ERRORS = NETWORK_ERRORS
+
+# Combined Kite API errors (includes network + requests)
+KITE_API_ERRORS = NETWORK_ERRORS + REQUESTS_ERRORS
 
 
 # Kite-specific retryable errors (rate limits, transient failures)

@@ -10,6 +10,7 @@ import pandas as pd
 from kiteconnect import KiteConnect
 
 from .base import IDataSource, Quote, Instrument
+from backend.core.utils.retry import retry_sync, KITE_API_ERRORS
 
 
 class ZerodhaDataSource(IDataSource):
@@ -55,8 +56,14 @@ class ZerodhaDataSource(IDataSource):
                 # Default to NSE
                 identifiers.append(f"NSE:{token}")
         
-        # Fetch quotes from Kite
-        raw_quotes = self.kite.quote(identifiers)
+        # Fetch quotes from Kite with retry
+        raw_quotes = retry_sync(
+            lambda: self.kite.quote(identifiers),
+            retryable_exceptions=KITE_API_ERRORS,
+            max_retries=3,
+            base_delay=1.0,
+            max_delay=10.0
+        )
         
         quotes = {}
         for key, data in raw_quotes.items():
@@ -108,11 +115,18 @@ class ZerodhaDataSource(IDataSource):
         Returns:
             DataFrame with columns: date, open, high, low, close, volume
         """
-        data = self.kite.historical_data(
-            instrument_token=instrument_token,
-            from_date=from_date,
-            to_date=to_date,
-            interval=interval
+        # Wrap with retry for rate limiting
+        data = retry_sync(
+            lambda: self.kite.historical_data(
+                instrument_token=instrument_token,
+                from_date=from_date,
+                to_date=to_date,
+                interval=interval
+            ),
+            retryable_exceptions=KITE_API_ERRORS,
+            max_retries=3,
+            base_delay=1.0,
+            max_delay=10.0
         )
         
         df = pd.DataFrame(data)
@@ -142,8 +156,14 @@ class ZerodhaDataSource(IDataSource):
                     instruments = [i for i in instruments if i.exchange == exchange]
                 return instruments
         
-        # Fetch from API
-        raw_instruments = self.kite.instruments(exchange=exchange)
+        # Fetch from API with retry
+        raw_instruments = retry_sync(
+            lambda: self.kite.instruments(exchange=exchange),
+            retryable_exceptions=KITE_API_ERRORS,
+            max_retries=3,
+            base_delay=1.0,
+            max_delay=10.0
+        )
         
         instruments = []
         for data in raw_instruments:

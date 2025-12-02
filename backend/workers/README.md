@@ -94,25 +94,40 @@ python -m backend.workers.vwap_ema_breakout_worker
 
 ## Running Workers
 
-### Quick Start with Interactive Menu
+### Unified Strategy Runner
+
+All workers are run through a single script:
 
 ```bash
-python -m backend.workers.run_workers
+# Signal-only mode (save to files, no guardrails)
+python -m backend.workers.run_strategy vwap_breakout --mode signals
+
+# Paper trading mode (guardrails, no real orders)
+python -m backend.workers.run_strategy vwap_breakout --mode paper
+
+# Live trading mode (REAL ORDERS)
+python -m backend.workers.run_strategy vwap_breakout --mode live
+
+# Run ALL strategies
+python -m backend.workers.run_strategy all --mode paper
 ```
 
-This launches an interactive menu:
-```
-MOMENTUM TRADING SYSTEM - Worker Startup
-======================================================================
+### Available Strategies
 
-Available modes:
-  1. Signal-only mode (save signals to file)
-  2. Paper trading mode (dry_run=True)
-  3. Live trading mode (REAL ORDERS)
-  4. Multiple strategies
+| Strategy | Description |
+|----------|-------------|
+| `vwap_breakout` | Enter when price breaks VWAP with volume |
+| `vwap_ema` | Combined VWAP + EMA + breakout |
+| `bullish_flag` | Flag pattern breakout after pullback |
+| `all` | Run all strategies concurrently |
 
-Select mode (1-4):
-```
+### Execution Modes
+
+| Mode | `use_execution` | `dry_run` | What happens |
+|------|-----------------|-----------|--------------|
+| `signals` | False | - | Signals saved to files only |
+| `paper` | True | True | Guardrails checked, no real orders |
+| `live` | True | False | **REAL ORDERS placed** |
 
 ### Mode Details
 

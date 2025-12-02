@@ -302,8 +302,10 @@ class TopGainersMomentumStrategy(BaseStrategy):
         Returns:
             SELL signal if should exit, None otherwise
         """
-        # Get exit time from config
+        # Get exit time from config - ensure same timezone as current_time
         exit_time = datetime.combine(current_time.date(), self.config.exit_time)
+        if current_time.tzinfo is not None:
+            exit_time = exit_time.replace(tzinfo=current_time.tzinfo)
         
         # Check exit conditions
         exit_reason = position.check_exit(current_price, current_time, exit_time)

@@ -13,6 +13,7 @@ import logging
 from backend.core.services.kite_service import KiteService
 from backend.infrastructure.database.order_repository import OrderRepository
 from backend.models import Signal
+from backend.core.utils.retry import retry_sync, RetryError, KITE_API_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -239,8 +240,18 @@ class OrderManager:
         try:
             logger.debug("Syncing orders from Kite...")
             
-            # Fetch all orders from Kite
-            kite_orders = self.kite.kite.orders()
+            # Fetch all orders from Kite with retry for transient failures
+            try:
+                kite_orders = retry_sync(
+                    self.kite.kite.orders,
+                    max_retries=3,
+                    base_delay=2.0,
+                    max_delay=15.0,
+                    retryable_exceptions=KITE_API_ERRORS + (Exception,),
+                )
+            except RetryError as e:
+                logger.error(f"Failed to fetch orders after retries: {e.last_exception}")
+                return 0
             
             synced_count = 0
             

@@ -17,10 +17,12 @@ from backend.core.utils.timezone import (
 
 from backend.core.utils.retry import (
     retry_async,
+    retry_sync,
     with_retry,
     RetryError,
     NETWORK_ERRORS,
     AIOHTTP_ERRORS,
+    KITE_API_ERRORS,
     is_kite_retryable
 )
 
@@ -40,9 +42,11 @@ __all__ = [
     'format_time_ist',
     # Retry
     'retry_async',
+    'retry_sync',
     'with_retry',
     'RetryError',
     'NETWORK_ERRORS',
     'AIOHTTP_ERRORS',
+    'KITE_API_ERRORS',
     'is_kite_retryable'
 ]

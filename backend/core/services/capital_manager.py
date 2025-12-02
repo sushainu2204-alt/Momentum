@@ -17,6 +17,7 @@ import logging
 
 from backend.core.services.position_manager import PositionManager
 from backend.infrastructure.database.base import IDatabase
+from backend.core.utils.retry import retry_sync, RetryError, KITE_API_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -387,9 +388,23 @@ class CapitalManager:
                     logger.debug("Using cached margins data")
                     return self._margins_cache
             
-            # Fetch from Kite
+            # Fetch from Kite with retry for transient failures
             logger.debug("Fetching margins from Kite API")
-            margins = self.kite.margins()
+            try:
+                margins = retry_sync(
+                    self.kite.margins,
+                    max_retries=3,
+                    base_delay=2.0,
+                    max_delay=15.0,
+                    retryable_exceptions=KITE_API_ERRORS + (Exception,),
+                )
+            except RetryError as e:
+                logger.error(f"Failed to fetch margins after retries: {e.last_exception}")
+                # Return stale cache if available
+                if self._margins_cache:
+                    logger.warning("Using stale margins cache due to Kite error")
+                    return self._margins_cache
+                return None
             
             # Update cache
             self._margins_cache = margins

@@ -13,6 +13,7 @@ import logging
 from backend.core.services.kite_service import KiteService
 from backend.infrastructure.database.position_repository import PositionRepository
 from backend.models import Position, PositionStatus, Signal, SignalType
+from backend.core.utils.retry import retry_sync, RetryError, KITE_API_ERRORS
 
 logger = logging.getLogger(__name__)
 
@@ -232,8 +233,19 @@ class PositionManager:
         try:
             logger.debug("Syncing positions from Kite...")
             
-            # Fetch positions from Kite
-            kite_data = self.kite.kite.positions()
+            # Fetch positions from Kite with retry for transient failures
+            try:
+                kite_data = retry_sync(
+                    self.kite.kite.positions,
+                    max_retries=3,
+                    base_delay=2.0,
+                    max_delay=15.0,
+                    retryable_exceptions=KITE_API_ERRORS + (Exception,),
+                )
+            except RetryError as e:
+                logger.error(f"Failed to fetch positions after retries: {e.last_exception}")
+                return 0
+            
             kite_positions = kite_data.get('day', [])
             
             # Get open positions from DB

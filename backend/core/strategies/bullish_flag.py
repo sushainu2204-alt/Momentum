@@ -254,8 +254,10 @@ class BullishFlagStrategy(BaseStrategy):
         Returns:
             SELL signal if should exit, None otherwise
         """
-        # Get exit time from config
+        # Get exit time from config - ensure same timezone as current_time
         exit_time = datetime.combine(current_time.date(), self.config.exit_time)
+        if current_time.tzinfo is not None:
+            exit_time = exit_time.replace(tzinfo=current_time.tzinfo)
         
         # Check exit conditions
         exit_reason = position.check_exit(current_price, current_time, exit_time)
@@ -278,6 +280,11 @@ class BullishFlagStrategy(BaseStrategy):
         """Check if entry is allowed at current time"""
         entry_cutoff = datetime.combine(current_time.date(), self.config.no_entry_after)
         market_open = datetime.combine(current_time.date(), self.config.market_open_time)
+        
+        # If current_time is timezone-aware, make cutoff times timezone-aware too
+        if current_time.tzinfo is not None:
+            entry_cutoff = entry_cutoff.replace(tzinfo=current_time.tzinfo)
+            market_open = market_open.replace(tzinfo=current_time.tzinfo)
         
         return market_open <= current_time <= entry_cutoff
     

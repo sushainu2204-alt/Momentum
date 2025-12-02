@@ -161,6 +161,8 @@ class PositionManagerService:
         """
         exit_signals = []
         exit_time = datetime.combine(current_time.date(), self.config.exit_time)
+        if current_time.tzinfo is not None:
+            exit_time = exit_time.replace(tzinfo=current_time.tzinfo)
         
         for symbol, position in list(self.positions.items()):
             # Get current price

@@ -22,7 +22,6 @@ from backend.core.logging_config import setup_logging
 
 # Setup logging
 logger = setup_logging('sync_jobs')
-logger = logging.getLogger(__name__)
 
 # Load environment
 load_dotenv()

@@ -496,7 +496,7 @@ class BaseStrategyWorker(ABC):
                             self.signals_executed += 1
                             
                             # Save executed order to separate file
-                            self.signal_storage.save_executed_order(
+                            await self.signal_storage.save_executed_order(
                                 signal=signal,
                                 strategy_name=self.get_strategy_name(),
                                 order_id=result.order_id,

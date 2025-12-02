@@ -1,0 +1,164 @@
+[
+  {
+    "timestamp": "2025-12-02T09:38:00.000888+05:30",
+    "symbol": "NECLIFE",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 18.08,
+    "stop_loss": 17.953439999999997,
+    "target": 18.351199999999995,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b918.08 > VWAP: \u20b916.69, EMA: \u20b917.35, prev_high: \u20b917.46)",
+    "metadata": {
+      "gain_pct": 3.79,
+      "volume": 772795,
+      "avg_volume": 772795,
+      "vwap": 16.6861768018655,
+      "ema_20": 17.35076378874444
+    }
+  },
+  {
+    "timestamp": "2025-12-02T09:39:00.001889+05:30",
+    "symbol": "BANKBARODA",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 303.7,
+    "stop_loss": 301.5741,
+    "target": 308.2555,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b9303.70 > VWAP: \u20b9289.31, EMA: \u20b9297.62, prev_high: \u20b9303.00)",
+    "metadata": {
+      "gain_pct": 2.76,
+      "volume": 4746668,
+      "avg_volume": 4746668,
+      "vwap": 289.30583563818215,
+      "ema_20": 297.6225315736043
+    }
+  },
+  {
+    "timestamp": "2025-12-02T09:42:00.011655+05:30",
+    "symbol": "INDOWIND",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 17.59,
+    "stop_loss": 17.46687,
+    "target": 17.853849999999998,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b917.59 > VWAP: \u20b917.07, EMA: \u20b917.17, prev_high: \u20b917.49)",
+    "metadata": {
+      "gain_pct": 3.71,
+      "volume": 1754340,
+      "avg_volume": 1754340,
+      "vwap": 17.06524784245967,
+      "ema_20": 17.16510377487825
+    }
+  },
+  {
+    "timestamp": "2025-12-02T09:43:00.008207+05:30",
+    "symbol": "INDOWIND",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 17.56,
+    "stop_loss": 17.437079999999998,
+    "target": 17.823399999999996,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b917.56 > VWAP: \u20b917.07, EMA: \u20b917.17, prev_high: \u20b917.49)",
+    "metadata": {
+      "gain_pct": 3.54,
+      "volume": 1812230,
+      "avg_volume": 1812230,
+      "vwap": 17.066970863371335,
+      "ema_20": 17.16510377487825
+    }
+  },
+  {
+    "timestamp": "2025-12-02T09:44:00.000467+05:30",
+    "symbol": "INDOWIND",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 17.62,
+    "stop_loss": 17.496660000000002,
+    "target": 17.8843,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b917.62 > VWAP: \u20b917.09, EMA: \u20b917.17, prev_high: \u20b917.49)",
+    "metadata": {
+      "gain_pct": 3.89,
+      "volume": 1825259,
+      "avg_volume": 1825259,
+      "vwap": 17.091677896129813,
+      "ema_20": 17.168913298687773
+    }
+  },
+  {
+    "timestamp": "2025-12-02T09:52:00.001299+05:30",
+    "symbol": "JPPOWER",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 19.29,
+    "stop_loss": 19.15497,
+    "target": 19.579349999999998,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b919.29 > VWAP: \u20b919.35, EMA: \u20b918.95, prev_high: \u20b919.48)",
+    "metadata": {
+      "gain_pct": 2.77,
+      "volume": 26446435,
+      "avg_volume": 26446435,
+      "vwap": 19.352872518615726,
+      "ema_20": 18.949915462953307
+    }
+  },
+  {
+    "timestamp": "2025-12-02T09:53:00.007805+05:30",
+    "symbol": "GUJGASLTD",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 411.7,
+    "stop_loss": 408.81809999999996,
+    "target": 417.87549999999993,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b9411.70 > VWAP: \u20b9397.93, EMA: \u20b9402.79, prev_high: \u20b9411.15)",
+    "metadata": {
+      "gain_pct": 3.81,
+      "volume": 327252,
+      "avg_volume": 327252,
+      "vwap": 397.9330851968132,
+      "ema_20": 402.7883408018281
+    }
+  },
+  {
+    "timestamp": "2025-12-02T09:54:00.009402+05:30",
+    "symbol": "GUJGASLTD",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 411.4,
+    "stop_loss": 408.5202,
+    "target": 417.5709999999999,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b9411.40 > VWAP: \u20b9398.01, EMA: \u20b9402.86, prev_high: \u20b9411.15)",
+    "metadata": {
+      "gain_pct": 3.73,
+      "volume": 346870,
+      "avg_volume": 346870,
+      "vwap": 398.0106458328665,
+      "ema_20": 402.85500746849476
+    }
+  },
+  {
+    "timestamp": "2025-12-02T09:54:00.009402+05:30",
+    "symbol": "NATCOPHARM",
+    "instrument_token": 0,
+    "signal_type": "BUY",
+    "price": 936.6,
+    "stop_loss": 930.0438,
+    "target": 950.6489999999999,
+    "quantity": 1,
+    "reason": "VWAP/EMA breakout (price: \u20b9936.60 > VWAP: \u20b9906.60, EMA: \u20b9916.77, prev_high: \u20b9937.45)",
+    "metadata": {
+      "gain_pct": 3.7,
+      "volume": 1826407,
+      "avg_volume": 1826407,
+      "vwap": 906.6000651925866,
+      "ema_20": 916.7715016570733
+    }
+  }
+]

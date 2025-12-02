@@ -13,6 +13,7 @@ load_dotenv()
 KITE_API_KEY = os.environ.get("KITE_API_KEY")
 KITE_API_SECRET = os.environ.get("KITE_API_SECRET")
 KITE_REDIRECT_URL = os.environ.get("KITE_REDIRECT_URL")  # e.g. http://localhost:8000/callback
+ENABLE_TICKER = os.environ.get("ENABLE_TICKER", "false").lower() == "true"  # Disabled by default
 
 app = FastAPI(title="Zerodha Momentum - Backend")
 
@@ -97,9 +98,8 @@ async def callback(request: Request):
         _save_access_token_to_env(access_data["access_token"])
         print("✅ Access token saved to .env file")
         
-        # Save keys securely here (DB/encrypted storage) -- quick demo returns JSON
-        # Start a ticker thread for this user (in production run per-user workers)
-        if kite_client and access_data.get("access_token"):
+        # Start ticker streaming only if enabled via ENABLE_TICKER env var
+        if ENABLE_TICKER and kite_client and access_data.get("access_token"):
             # Give a moment for token to be set
             import time
             time.sleep(0.5)
@@ -110,13 +110,16 @@ async def callback(request: Request):
             t = threading.Thread(target=start_ticker, daemon=True)
             t.start()
             print("Ticker thread started successfully")
+        elif not ENABLE_TICKER:
+            print("ℹ️ Ticker disabled (set ENABLE_TICKER=true to enable)")
         
         # Return success without exposing full access_token
         return JSONResponse({
             "status": "connected", 
             "user_id": access_data.get("user_id"),
             "user_name": access_data.get("user_name"),
-            "message": "Successfully authenticated. Ticker streaming started."
+            "ticker_enabled": ENABLE_TICKER,
+            "message": "Successfully authenticated." + (" Ticker streaming started." if ENABLE_TICKER else " Ticker disabled.")
         })
     except Exception as e:
         print(f"Callback error: {e}")

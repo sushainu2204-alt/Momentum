@@ -1,5 +1,6 @@
 -- Trading System Database Schema
 -- Tracks positions, orders, capital, and trade execution state
+-- NOTE: All timestamps use TIMESTAMPTZ (timestamp with time zone) for proper IST handling
 
 -- ================================================================
 -- POSITIONS TABLE
@@ -13,7 +14,7 @@ CREATE TABLE IF NOT EXISTS positions (
     
     -- Entry details
     entry_price DECIMAL(10, 2) NOT NULL,
-    entry_time TIMESTAMP NOT NULL,
+    entry_time TIMESTAMPTZ NOT NULL,
     quantity INTEGER NOT NULL,
     
     -- Risk management
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS positions (
     
     -- Exit details
     exit_price DECIMAL(10, 2),
-    exit_time TIMESTAMP,
+    exit_time TIMESTAMPTZ,
     exit_reason VARCHAR(50),
     status VARCHAR(20) DEFAULT 'OPEN',  -- OPEN, TARGET_HIT, SL_HIT, TIME_EXIT, MANUAL_EXIT
     
@@ -37,8 +38,8 @@ CREATE TABLE IF NOT EXISTS positions (
     exit_order_id VARCHAR(50),   -- Kite order ID for exit
     metadata JSONB,
     
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for positions table
@@ -72,9 +73,9 @@ CREATE TABLE IF NOT EXISTS orders (
     average_price DECIMAL(10, 2),
     
     -- Timestamps
-    placed_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    filled_at TIMESTAMP,
+    placed_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    filled_at TIMESTAMPTZ,
     
     -- Relationships
     position_id INTEGER REFERENCES positions(id),
@@ -124,7 +125,7 @@ CREATE TABLE IF NOT EXISTS capital_state (
     -- Metadata
     metadata JSONB,
     
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for capital_state table
@@ -136,7 +137,7 @@ CREATE INDEX IF NOT EXISTS idx_capital_date ON capital_state(date);
 -- ================================================================
 CREATE TABLE IF NOT EXISTS trade_logs (
     id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMP NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
     log_type VARCHAR(30) NOT NULL,  -- SIGNAL_GENERATED, SIGNAL_IGNORED, ORDER_PLACED, ORDER_FILLED, POSITION_OPENED, POSITION_CLOSED, ERROR
     
     -- Context
@@ -167,7 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_trade_logs_strategy ON trade_logs(strategy_name);
 -- ================================================================
 CREATE TABLE IF NOT EXISTS signals (
     id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMP NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
     symbol VARCHAR(20) NOT NULL,
     instrument_token BIGINT NOT NULL,
     strategy_name VARCHAR(50) NOT NULL,
@@ -183,7 +184,7 @@ CREATE TABLE IF NOT EXISTS signals (
     -- Execution status
     execution_status VARCHAR(20) DEFAULT 'PENDING',  -- PENDING, EXECUTED, IGNORED, FAILED
     execution_reason TEXT,
-    executed_at TIMESTAMP,
+    executed_at TIMESTAMPTZ,
     
     -- References
     position_id INTEGER REFERENCES positions(id),
@@ -192,7 +193,7 @@ CREATE TABLE IF NOT EXISTS signals (
     -- Metadata
     metadata JSONB,
     
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for signals table
@@ -209,13 +210,13 @@ CREATE TABLE IF NOT EXISTS cooldown_tracker (
     id SERIAL PRIMARY KEY,
     symbol VARCHAR(20) NOT NULL,
     strategy_name VARCHAR(50) NOT NULL,
-    last_entry_time TIMESTAMP NOT NULL,
-    cooldown_until TIMESTAMP NOT NULL
+    last_entry_time TIMESTAMPTZ NOT NULL,
+    cooldown_until TIMESTAMPTZ NOT NULL
 );
 
--- Unique constraint for cooldown_tracker
+-- Unique constraint for cooldown_tracker (symbol + strategy + exact timestamp)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cooldown_unique 
-ON cooldown_tracker(symbol, strategy_name, CAST(last_entry_time AS DATE));
+ON cooldown_tracker(symbol, strategy_name, last_entry_time);
 
 -- Indexes for cooldown_tracker table
 CREATE INDEX IF NOT EXISTS idx_cooldown_symbol ON cooldown_tracker(symbol);
