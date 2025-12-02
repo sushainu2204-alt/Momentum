@@ -3,9 +3,9 @@ Signal Service
 Handles signal generation and publishing.
 """
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 from backend.config import settings
-from backend.core.models import Signal
+from backend.models import Signal, SignalType
 from backend.infrastructure.messaging import IMessageBroker
 
 
@@ -26,32 +26,42 @@ class SignalService:
     
     async def publish_signal(
         self,
+        symbol: str,
         instrument_token: int,
         signal_type: str,
         price: float,
-        strategy_name: str = "EMA_CROSSOVER",
+        stop_loss: Optional[float] = None,
+        target: Optional[float] = None,
+        reason: Optional[str] = None,
         metadata: Dict = None
     ):
         """
         Publish trading signal to Redis.
         
         Args:
+            symbol: Stock symbol
             instrument_token: Instrument token
             signal_type: "BUY" or "SELL"
             price: Current price
-            strategy_name: Name of strategy
+            stop_loss: Stop loss price
+            target: Target price
+            reason: Signal reason
             metadata: Additional metadata (EMAs, etc.)
         """
         signal = Signal(
+            symbol=symbol,
             instrument_token=instrument_token,
-            signal_type=signal_type,
+            signal_type=SignalType(signal_type),
             price=price,
-            timestamp=datetime.utcnow(),
-            strategy_name=strategy_name,
+            timestamp=datetime.now(),
+            stop_loss=stop_loss,
+            target=target,
+            reason=reason,
             metadata=metadata or {}
         )
         
         await self.message_broker.publish(self.signals_channel, signal.to_json())
         
-        print(f"📢 Published {signal_type} signal for {instrument_token} @ ₹{price}")
+        print(f"📢 Published {signal_type} signal for {symbol} ({instrument_token}) @ ₹{price}")
+        print(f"   SL: ₹{stop_loss}, Target: ₹{target}")
         print(f"   Metadata: {metadata}")

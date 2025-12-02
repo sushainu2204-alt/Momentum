@@ -10,7 +10,7 @@ Decision engine for executing trading signals with all guardrails.
 """
 
 from typing import Optional, Dict, Any
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -21,6 +21,7 @@ from backend.core.services.order_manager import OrderManager
 from backend.core.services.position_manager import PositionManager
 from backend.core.services.capital_manager import CapitalManager
 from backend.infrastructure.database.base import IDatabase
+from backend.core.utils.timezone import now_ist, is_market_hours, is_trading_window
 
 logger = logging.getLogger(__name__)
 
@@ -109,12 +110,12 @@ class SignalExecutor:
             ExecutionResult with status and details
         """
         try:
-            current_time = datetime.now()
+            current_time = now_ist()
             
             # ============================================================
             # GUARDRAIL 1: Check market hours
             # ============================================================
-            if not self._is_market_open(current_time):
+            if not is_market_hours(current_time):
                 result = ExecutionResult(
                     status=ExecutionStatus.IGNORED,
                     decision="IGNORE",
@@ -126,7 +127,7 @@ class SignalExecutor:
             # ============================================================
             # GUARDRAIL 2: Check time window
             # ============================================================
-            if not self._is_valid_time_window(current_time):
+            if not is_trading_window(current_time):
                 result = ExecutionResult(
                     status=ExecutionStatus.IGNORED,
                     decision="IGNORE",
@@ -381,7 +382,7 @@ class SignalExecutor:
                 {
                     "1": symbol,
                     "2": strategy_name,
-                    "3": datetime.now()
+                    "3": now_ist()
                 }
             )
             
@@ -406,14 +407,13 @@ class SignalExecutor:
             hours: Cooldown hours (default: 24 - no re-entry same day)
         """
         try:
-            from datetime import timedelta
-            
-            cooldown_until = datetime.now() + timedelta(hours=hours)
+            now = now_ist()
+            cooldown_until = now + timedelta(hours=hours)
             
             await self.db.insert("cooldown_tracker", {
                 "symbol": symbol,
                 "strategy_name": strategy_name,
-                "reason": "Position opened",
+                "last_entry_time": now,
                 "cooldown_until": cooldown_until
             })
             
@@ -469,7 +469,7 @@ class SignalExecutor:
             }
             
             log_data = {
-                "timestamp": datetime.now(),
+                "timestamp": now_ist(),
                 "log_type": action,
                 "symbol": signal.symbol,
                 "strategy_name": strategy_name,

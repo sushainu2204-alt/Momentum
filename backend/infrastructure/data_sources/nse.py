@@ -2,12 +2,18 @@
 NSE Data Source
 
 Fetches top gainers/losers from NSE India API.
+Uses aiohttp for async HTTP calls to avoid blocking the event loop.
 """
 
 from typing import List, Dict, Optional
 from datetime import datetime
-import requests
+import aiohttp
+import logging
 from dataclasses import dataclass
+
+from backend.core.utils.retry import retry_async, AIOHTTP_ERRORS
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,30 +44,62 @@ class NSEDataSource:
     
     Usage:
         nse = NSEDataSource()
-        gainers = nse.get_top_gainers()
+        gainers = await nse.get_top_gainers()
     """
     
     BASE_URL = "https://www.nseindia.com"
     
-    def __init__(self):
-        self.session = requests.Session()
-        # NSE requires these headers
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Referer': 'https://www.nseindia.com/'
-        })
-        
-    def _init_session(self):
-        """Initialize session by visiting homepage to get cookies"""
-        try:
-            self.session.get(self.BASE_URL, timeout=10)
-        except Exception as e:
-            print(f"⚠️  Warning: Could not initialize NSE session: {e}")
+    # NSE requires these headers
+    HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://www.nseindia.com/'
+    }
     
-    def get_top_gainers(self, limit: Optional[int] = None, category: str = "allSec") -> List[NSETopGainer]:
+    def __init__(self):
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._cookies_initialized = False
+    
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create aiohttp session"""
+        if self._session is None or self._session.closed:
+            timeout = aiohttp.ClientTimeout(total=30)
+            self._session = aiohttp.ClientSession(
+                headers=self.HEADERS,
+                timeout=timeout
+            )
+        return self._session
+    
+    async def _init_cookies(self):
+        """Initialize session by visiting homepage to get cookies"""
+        if self._cookies_initialized:
+            return
+        
+        try:
+            session = await self._get_session()
+            async with session.get(self.BASE_URL) as response:
+                await response.read()  # Read response to complete request
+                self._cookies_initialized = True
+        except Exception as e:
+            logger.warning(f"Could not initialize NSE session: {e}")
+    
+    async def close(self):
+        """Close the aiohttp session"""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
+            self._cookies_initialized = False
+    
+    async def _fetch_gainers_data(self, url: str) -> dict:
+        """Internal method to fetch gainers data with retry support"""
+        session = await self._get_session()
+        async with session.get(url) as response:
+            response.raise_for_status()
+            return await response.json()
+    
+    async def get_top_gainers(self, limit: Optional[int] = None, category: str = "allSec") -> List[NSETopGainer]:
         """
         Get top gainers from NSE.
         
@@ -75,35 +113,37 @@ class NSEDataSource:
             List of NSETopGainer objects
         """
         try:
-            # Initialize session if needed
-            self._init_session()
+            # Initialize session and cookies
+            await self._init_cookies()
             
-            # Fetch top gainers
+            # Fetch top gainers with retry
             url = f"{self.BASE_URL}/api/live-analysis-variations?index=gainers"
-            response = self.session.get(url, timeout=15)
-            response.raise_for_status()
-            
-            data = response.json()
+            data = await retry_async(
+                self._fetch_gainers_data,
+                url,
+                max_retries=3,
+                base_delay=1.0,
+                retryable_exceptions=AIOHTTP_ERRORS
+            )
             
             gainers = []
             
             # NSE API returns nested structure with different categories
-            # Print all available categories
-            print(f"📋 Available categories: {list(data.keys())}")
+            logger.debug(f"Available categories: {list(data.keys())}")
             for cat in data.keys():
                 if cat != 'legends' and isinstance(data.get(cat), dict):
                     cat_data = data.get(cat, {}).get('data', [])
-                    print(f"   {cat}: {len(cat_data)} stocks")
+                    logger.debug(f"   {cat}: {len(cat_data)} stocks")
             
             if category not in data:
-                print(f"⚠️  Category '{category}' not found in NSE response.")
+                logger.warning(f"Category '{category}' not found in NSE response.")
                 return []
             
             # Get data for specified category
             category_data = data.get(category, {})
             stocks = category_data.get('data', [])
             
-            print(f"📊 Found {len(stocks)} stocks in '{category}' category")
+            logger.info(f"Found {len(stocks)} stocks in '{category}' category")
             
             # Parse each stock
             for stock in stocks:
@@ -124,15 +164,14 @@ class NSEDataSource:
                     )
                     gainers.append(gainer)
                 except (ValueError, TypeError) as e:
-                    print(f"⚠️  Error parsing stock data: {e}")
+                    logger.warning(f"Error parsing stock data: {e}")
                     continue
             
-            print(f"✓ Fetched {len(gainers)} top gainers from NSE ({category})")
+            logger.info(f"Fetched {len(gainers)} top gainers from NSE ({category})")
             
-            # Print all gainers
-            print(f"\n📊 All {len(gainers)} gainers:")
+            # Log gainers at debug level
             for i, gainer in enumerate(gainers, 1):
-                print(f"{i:2}. {gainer.symbol:15} {gainer.last_price:10.2f} {gainer.pct_change:8.2f}% {gainer.volume:15,}")
+                logger.debug(f"{i:2}. {gainer.symbol:15} {gainer.last_price:10.2f} {gainer.pct_change:8.2f}% {gainer.volume:15,}")
             
             # Apply limit if specified
             if limit:
@@ -140,19 +179,14 @@ class NSEDataSource:
             
             return gainers
             
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Error fetching NSE top gainers: {e}")
-            print(f"❌ Response status: {response.status_code if 'response' in locals() else 'N/A'}")
-            if 'response' in locals():
-                print(f"❌ Response text: {response.text[:500]}")
+        except aiohttp.ClientError as e:
+            logger.error(f"Error fetching NSE top gainers: {e}")
             return []
         except Exception as e:
-            print(f"❌ Unexpected error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Unexpected error fetching top gainers: {e}", exc_info=True)
             return []
     
-    def get_top_losers(self, limit: Optional[int] = None) -> List[NSETopGainer]:
+    async def get_top_losers(self, limit: Optional[int] = None) -> List[NSETopGainer]:
         """
         Get top losers from NSE.
         
@@ -163,15 +197,15 @@ class NSEDataSource:
             List of NSETopGainer objects (with negative changes)
         """
         try:
-            # Initialize session if needed
-            self._init_session()
+            # Initialize session and cookies
+            await self._init_cookies()
+            session = await self._get_session()
             
             # Fetch top losers
             url = f"{self.BASE_URL}/api/live-analysis-variations?index=loosers"  # Note: NSE API uses "loosers"
-            response = self.session.get(url, timeout=15)
-            response.raise_for_status()
-            
-            data = response.json()
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
             
             losers = []
             
@@ -196,22 +230,22 @@ class NSEDataSource:
                         )
                         losers.append(loser)
                     except (ValueError, TypeError) as e:
-                        print(f"⚠️  Error parsing stock data: {e}")
+                        logger.warning(f"Error parsing stock data: {e}")
                         continue
             
             # Apply limit if specified
             if limit:
                 losers = losers[:limit]
             
-            print(f"✓ Fetched {len(losers)} top losers from NSE")
+            logger.info(f"Fetched {len(losers)} top losers from NSE")
             
             return losers
             
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Error fetching NSE top losers: {e}")
+        except aiohttp.ClientError as e:
+            logger.error(f"Error fetching NSE top losers: {e}")
             return []
         except Exception as e:
-            print(f"❌ Unexpected error: {e}")
+            logger.error(f"Unexpected error fetching top losers: {e}", exc_info=True)
             return []
     
     def map_to_candidate(self, gainer: NSETopGainer, instrument_token: int = 0) -> Dict:

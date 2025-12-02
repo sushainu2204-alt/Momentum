@@ -311,18 +311,34 @@ class OrderManager:
     ) -> Optional[str]:
         """Place bracket order via Kite API with automatic SL/Target"""
         try:
-            # Calculate squareoff and stoploss points from entry price
-            entry_price = price if price else 0  # Will be filled at market price if MARKET order
+            # For MARKET orders, we need a reference price to calculate SL/Target points
+            # Use the current market price from stop_loss and target to derive entry estimate
+            if price and price > 0:
+                entry_price = price
+            else:
+                # For MARKET orders, estimate entry as midpoint between SL and Target
+                # This gives us reasonable bracket order points
+                if transaction_type == "BUY":
+                    # For BUY: SL < entry < Target
+                    # Estimate entry price based on typical risk:reward
+                    entry_price = stop_loss + (target - stop_loss) * 0.4  # Assume 40% from SL
+                else:
+                    # For SELL: Target < entry < SL
+                    entry_price = target + (stop_loss - target) * 0.4
             
             # For bracket orders, we need absolute points (not prices)
             # squareoff = points above entry for profit
             # stoploss = points below entry for loss
             if transaction_type == "BUY":
-                squareoff = abs(target - entry_price) if entry_price else abs(target - stop_loss) * 2
-                stoploss = abs(entry_price - stop_loss) if entry_price else abs(target - stop_loss)
+                squareoff = abs(target - entry_price)
+                stoploss = abs(entry_price - stop_loss)
             else:  # SELL
-                squareoff = abs(entry_price - target) if entry_price else abs(target - stop_loss) * 2
-                stoploss = abs(stop_loss - entry_price) if entry_price else abs(target - stop_loss)
+                squareoff = abs(entry_price - target)
+                stoploss = abs(stop_loss - entry_price)
+            
+            # Ensure minimum values (at least 0.05 points)
+            squareoff = max(squareoff, 0.05)
+            stoploss = max(stoploss, 0.05)
             
             order_params = {
                 "tradingsymbol": symbol,
@@ -340,7 +356,7 @@ class OrderManager:
                 order_params["price"] = price
             
             order_id = self.kite.kite.place_order(**order_params)
-            logger.info(f"Bracket order placed: SL={stoploss:.2f} pts, Target={squareoff:.2f} pts")
+            logger.info(f"Bracket order placed: SL={stoploss:.2f} pts, Target={squareoff:.2f} pts (entry ref: ₹{entry_price:.2f})")
             return order_id
             
         except Exception as e:
@@ -359,6 +375,82 @@ class OrderManager:
         except Exception as e:
             logger.error(f"Kite order cancellation failed: {e}")
             return False
+    
+    async def exit_bracket_order(self, parent_order_id: str) -> bool:
+        """
+        Exit a bracket order position by cancelling the pending SL/Target orders.
+        
+        For bracket orders in Kite:
+        - The entry order creates child SL and Target orders
+        - To exit early, we need to place a counter order or use exit API
+        
+        Args:
+            parent_order_id: The parent bracket order ID
+            
+        Returns:
+            True if exit successful
+        """
+        try:
+            # Kite's exit_order for bracket orders
+            # This exits the position at market price and cancels pending SL/Target
+            self.kite.kite.exit_order(
+                variety=self.kite.kite.VARIETY_BO,
+                order_id=parent_order_id
+            )
+            logger.info(f"Bracket order exited: {parent_order_id}")
+            self._invalidate_cache()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to exit bracket order {parent_order_id}: {e}")
+            return False
+    
+    async def exit_all_bracket_positions(self) -> int:
+        """
+        Exit all open bracket order positions.
+        Used for time-based exits (3:15 PM).
+        
+        Returns:
+            Number of positions exited
+        """
+        try:
+            # Fetch all orders
+            orders = self.kite.kite.orders()
+            
+            # Find parent BO orders that are COMPLETE (position opened)
+            parent_orders = []
+            for order in orders:
+                if (order.get('variety') == 'bo' and 
+                    order.get('status') == 'COMPLETE' and
+                    order.get('transaction_type') == 'BUY'):  # Entry orders
+                    # Check if there are still pending child orders (SL/Target)
+                    parent_id = order.get('order_id')
+                    has_pending_children = any(
+                        o.get('parent_order_id') == parent_id and 
+                        o.get('status') in ['OPEN', 'TRIGGER PENDING']
+                        for o in orders
+                    )
+                    if has_pending_children:
+                        parent_orders.append(order)
+            
+            exited = 0
+            for order in parent_orders:
+                success = await self.exit_bracket_order(order['order_id'])
+                if success:
+                    exited += 1
+                    
+                    # Update DB
+                    await self.order_repo.update_order(
+                        order_id=order['order_id'],
+                        status="EXITED",
+                        status_message="Time-based exit (3:15 PM)"
+                    )
+            
+            logger.info(f"Exited {exited}/{len(parent_orders)} bracket positions")
+            return exited
+            
+        except Exception as e:
+            logger.error(f"Error exiting bracket positions: {e}", exc_info=True)
+            return 0
     
     async def _get_kite_orders_cached(self) -> List[Dict]:
         """Get orders with 2-second cache"""

@@ -21,6 +21,7 @@ from backend.core.services.order_manager import OrderManager
 from backend.core.services.position_manager import PositionManager
 from backend.core.services.capital_manager import CapitalManager
 from backend.core.services.signal_executor import SignalExecutor
+from backend.core.utils.timezone import now_ist, is_market_hours
 
 logger = logging.getLogger(__name__)
 
@@ -223,46 +224,22 @@ class SyncJobsScheduler:
         try:
             logger.debug("Starting position monitoring job...")
             
-            current_time = datetime.now()
+            current_time = now_ist()
             
             # Check if it's time to exit all positions (3:15 PM - before Zerodha's 3:20 PM auto square-off)
             if self.signal_executor.should_exit_all_positions(current_time):
-                logger.info("🔔 Auto-exit time reached (3:15 PM) - placing exit orders (before Zerodha's 3:20 PM square-off)")
+                logger.info("🔔 Auto-exit time reached (3:15 PM) - exiting bracket positions (before Zerodha's 3:20 PM square-off)")
                 
-                # Get all open positions from Kite (not DB - source of truth)
-                positions = await self.position_manager.get_open_positions()
+                # Exit all bracket order positions using Kite's exit API
+                # This properly handles the parent-child order relationship
+                exited = await self.order_manager.exit_all_bracket_positions()
+                logger.info(f"✅ Exited {exited} bracket positions")
                 
-                if positions:
-                    logger.info(f"Placing exit orders for {len(positions)} open positions")
-                    
-                    # Generate exit signals for all positions
-                    exit_signals = []
-                    for pos in positions:
-                        from backend.models.signal import Signal
-                        
-                        exit_signal = Signal(
-                            symbol=pos['tradingsymbol'],
-                            signal_type="SELL",
-                            price=pos['last_price'],
-                            stop_loss=0,  # Not relevant for exit
-                            target=0,     # Not relevant for exit
-                            quantity=abs(pos['quantity']),
-                            reason="Time-based exit (3:15 PM - before auto square-off)",
-                            timestamp=current_time
-                        )
-                        exit_signals.append(exit_signal)
-                    
-                    # Execute exit signals (places orders on Kite)
-                    results = await self.signal_executor.execute_exit_signals(
-                        exit_signals,
-                        strategy_name="AUTO_EXIT"
-                    )
-                    
-                    executed = sum(1 for r in results if r.status == "EXECUTED")
-                    logger.info(f"✅ Placed {executed}/{len(exit_signals)} exit orders")
-                    logger.info(f"⏳ Position records will be closed when Kite confirms exits (next sync)")
-                else:
-                    logger.info("No open positions to exit")
+                # Also check for any regular (non-bracket) positions from DB
+                # and log them for manual handling if needed
+                db_positions = await self.position_manager.get_open_positions()
+                if db_positions:
+                    logger.info(f"⏳ {len(db_positions)} position records will be closed when Kite confirms exits (next sync)")
             
             # Always sync positions to update P&L and detect closures
             # This will close DB positions when Kite shows quantity=0
@@ -299,18 +276,7 @@ class SyncJobsScheduler:
     
     def _is_market_hours(self) -> bool:
         """Check if currently in market hours"""
-        now = datetime.now()
-        current_time = now.time()
-        
-        # Check weekday
-        if now.weekday() >= 5:  # Saturday or Sunday
-            return False
-        
-        # Check time range
-        if current_time < self.market_open or current_time > self.market_close:
-            return False
-        
-        return True
+        return is_market_hours()
     
     def _log_job_schedule(self):
         """Log scheduled jobs"""

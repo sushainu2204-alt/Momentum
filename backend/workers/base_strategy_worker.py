@@ -29,6 +29,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from backend.core.strategies.base import BaseStrategy
 from backend.core.services.signal_storage import SignalStorage
+from backend.core.utils.timezone import now_ist, is_market_hours, is_trading_window, get_today_date_str
 from backend.core.services.signal_executor import SignalExecutor
 from backend.core.services.order_manager import OrderManager
 from backend.core.services.position_manager import PositionManager
@@ -36,7 +37,7 @@ from backend.core.services.capital_manager import CapitalManager
 from backend.infrastructure.data_sources.nse import NSEDataSource
 from backend.infrastructure.data_sources import ZerodhaDataSource
 from backend.core.services.kite_service import KiteService
-from backend.infrastructure.database.postgres import PostgresDatabase
+from backend.infrastructure.database.factory import create_database
 from backend.models import Candidate, Signal
 from backend.core.logging_config import setup_logging
 
@@ -182,15 +183,8 @@ class BaseStrategyWorker(ABC):
         try:
             logger.info("Initializing execution services...")
             
-            # Initialize database
-            db_config = {
-                "host": "127.0.0.1",
-                "port": 5432,
-                "database": "appdb",
-                "user": "appuser",
-                "password": "secret"
-            }
-            self.database = PostgresDatabase(db_config)
+            # Initialize database using factory (gets config from settings)
+            self.database = create_database()
             await self.database.connect()
             logger.info("✅ Database connected")
             
@@ -281,13 +275,11 @@ class BaseStrategyWorker(ABC):
             await self._initialize_execution_services()
             self._execution_services_initialized = True
         
-        current_time = datetime.now()
+        current_time = now_ist()
         
-        # Check if we're within market scanning hours (9:16 AM - 3:20 PM)
-        if current_time.hour < 9 or (current_time.hour == 9 and current_time.minute < 16):
-            return  # Too early
-        if current_time.hour > 15 or (current_time.hour == 15 and current_time.minute > 20):
-            return  # Too late
+        # Check if we're within market scanning hours using timezone utility
+        if not is_trading_window(current_time, skip_first_minutes=1, skip_last_minutes=10):
+            return  # Outside trading window
         
         # Set is_running if not already set (handles case where worker starts after 9:15)
         if not self.is_running:
@@ -304,7 +296,7 @@ class BaseStrategyWorker(ABC):
             
             for category in all_categories:
                 try:
-                    category_gainers = self.nse_data_source.get_top_gainers(category=category)
+                    category_gainers = await self.nse_data_source.get_top_gainers(category=category)
                     
                     # Add only unique symbols (avoid duplicates across categories)
                     for gainer in category_gainers:
@@ -383,7 +375,7 @@ class BaseStrategyWorker(ABC):
                     logger.error(f"Error getting capital summary: {e}")
         
         # Export signals to CSV (if in signal-only mode or as backup)
-        today = datetime.now()
+        today = now_ist()
         report_file = self.signal_storage.export_daily_report(today)
         
         if report_file:
@@ -591,8 +583,8 @@ class BaseStrategyWorker(ABC):
         
         try:
             # Calculate date range
-            from_date = datetime.now() - timedelta(days=days + 5)  # Buffer for holidays
-            to_date = datetime.now()
+            from_date = now_ist() - timedelta(days=days + 5)  # Buffer for holidays
+            to_date = now_ist()
             
             # Search for instrument
             instruments = self.zerodha_data_source.search_instruments(symbol)
@@ -675,5 +667,20 @@ class BaseStrategyWorker(ABC):
                 await asyncio.sleep(60)
         except (KeyboardInterrupt, SystemExit):
             logger.info("\n🛑 Stopping worker...")
-            self.scheduler.shutdown()
+            await self._cleanup()
             logger.info("✅ Worker stopped")
+    
+    async def _cleanup(self):
+        """Cleanup all resources on shutdown"""
+        # Stop scheduler
+        if self.scheduler:
+            self.scheduler.shutdown()
+        
+        # Cleanup NSE data source session
+        if self.nse_data_source:
+            await self.nse_data_source.close()
+        
+        # Disconnect database
+        if self.database:
+            await self.database.disconnect()
+            logger.info("✅ Database disconnected")

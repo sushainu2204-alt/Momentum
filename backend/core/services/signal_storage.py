@@ -35,6 +35,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 import logging
+import aiofiles
 
 from backend.models import Signal
 from backend.infrastructure.database.base import IDatabase
@@ -92,7 +93,7 @@ class SignalStorage:
             metadata: Additional context (filters, indicators, etc.)
         """
         if self.storage_type == "file":
-            self._save_to_file(signal, strategy_name, metadata)
+            await self._save_to_file(signal, strategy_name, metadata)
         elif self.storage_type == "database":
             await self._save_to_db(signal, strategy_name, metadata)
     
@@ -117,13 +118,13 @@ class SignalStorage:
             return await self._get_from_db(date, strategy_name)
         return []
     
-    def _save_to_file(
+    async def _save_to_file(
         self,
         signal: Signal,
         strategy_name: str,
         metadata: Optional[Dict]
     ):
-        """Save signal to JSON file"""
+        """Save signal to JSON file (async)"""
         # Create date directory
         date_str = signal.timestamp.strftime("%Y-%m-%d")
         date_dir = self.base_path / date_str
@@ -136,8 +137,9 @@ class SignalStorage:
         # Load existing signals
         signals = []
         if filepath.exists():
-            with open(filepath, 'r') as f:
-                signals = json.load(f)
+            async with aiofiles.open(filepath, 'r') as f:
+                content = await f.read()
+                signals = json.loads(content)
         
         # Prepare signal data
         signal_data = {
@@ -156,8 +158,8 @@ class SignalStorage:
         # Append and save
         signals.append(signal_data)
         
-        with open(filepath, 'w') as f:
-            json.dump(signals, f, indent=2)
+        async with aiofiles.open(filepath, 'w') as f:
+            await f.write(json.dumps(signals, indent=2))
         
         logger.info(f"✅ Signal saved: {strategy_name} - {signal.symbol} @ {signal.price:.2f}")
     
@@ -246,7 +248,7 @@ class SignalStorage:
         logger.info(f"📄 Daily report exported: {filename}")
         return filename
     
-    def save_executed_order(
+    async def save_executed_order(
         self,
         signal: Signal,
         strategy_name: str,
@@ -255,7 +257,7 @@ class SignalStorage:
         execution_result: Dict[str, Any]
     ):
         """
-        Save executed order to separate orders file.
+        Save executed order to separate orders file (async).
         
         Args:
             signal: Original signal
@@ -276,8 +278,9 @@ class SignalStorage:
         # Load existing orders
         orders = []
         if filepath.exists():
-            with open(filepath, 'r') as f:
-                orders = json.load(f)
+            async with aiofiles.open(filepath, 'r') as f:
+                content = await f.read()
+                orders = json.loads(content)
         
         # Prepare order data
         order_data = {
@@ -299,7 +302,7 @@ class SignalStorage:
         # Append and save
         orders.append(order_data)
         
-        with open(filepath, 'w') as f:
-            json.dump(orders, f, indent=2)
+        async with aiofiles.open(filepath, 'w') as f:
+            await f.write(json.dumps(orders, indent=2))
         
         logger.info(f"✅ Order saved: {strategy_name} - {signal.symbol} @ {signal.price:.2f} (Order ID: {order_id})")

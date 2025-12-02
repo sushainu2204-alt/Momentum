@@ -8,6 +8,13 @@ httpx>=0.28.1
 uvloop==0.21.0
 numpy>=1.26.0
 
+# Async I/O
+aiohttp>=3.9.0
+aiofiles>=23.2.1
+
+# Timezone handling
+pytz>=2024.1
+
 # Job Scheduling
 APScheduler==3.10.4
 

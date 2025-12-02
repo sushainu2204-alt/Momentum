@@ -64,6 +64,11 @@ class StockScreenerService:
         self._instruments: List[Instrument] = []
         self._instruments_loaded = False
     
+    async def close(self):
+        """Cleanup resources"""
+        if self.nse_source:
+            await self.nse_source.close()
+    
     def _load_instruments(self) -> List[Instrument]:
         """Load instruments from universe (cached)"""
         if not self._instruments_loaded:
@@ -75,7 +80,7 @@ class StockScreenerService:
         return self._instruments
     
 
-    def screen_top_gainers(self) -> List[Candidate]:
+    async def screen_top_gainers(self) -> List[Candidate]:
         """
         Screen for top gainer stocks based on % gain criteria.
         Uses NSE API if enabled, otherwise scans all stocks in universe.
@@ -84,11 +89,11 @@ class StockScreenerService:
             List of Candidate objects that meet gain criteria
         """
         if self.use_nse_api and self.nse_source:
-            return self._screen_top_gainers_nse()
+            return await self._screen_top_gainers_nse()
         else:
             return self._screen_top_gainers_universe()
     
-    def _screen_top_gainers_nse(self) -> List[Candidate]:
+    async def _screen_top_gainers_nse(self) -> List[Candidate]:
         """
         Screen top gainers using NSE API (faster).
         
@@ -98,7 +103,7 @@ class StockScreenerService:
         print("🔍 Fetching top gainers from NSE API...")
         
         # Get top gainers from NSE
-        nse_gainers = self.nse_source.get_top_gainers()
+        nse_gainers = await self.nse_source.get_top_gainers()
         
         if not nse_gainers:
             print("⚠️  No gainers found from NSE API")

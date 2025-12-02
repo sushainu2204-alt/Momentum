@@ -1,0 +1,47 @@
+[
+  {
+    "timestamp": "2025-12-02T07:45:47.727693",
+    "symbol": "RELIANCE",
+    "instrument_token": 738561,
+    "signal_type": "BUY",
+    "price": 2450.0,
+    "stop_loss": 2420.0,
+    "target": 2510.0,
+    "quantity": 10,
+    "order_id": "TEST_ORDER_123",
+    "execution_status": "complete",
+    "execution_reason": null,
+    "signal_reason": "Test signal",
+    "metadata": {}
+  },
+  {
+    "timestamp": "2025-12-02T07:47:16.016154",
+    "symbol": "RELIANCE",
+    "instrument_token": 738561,
+    "signal_type": "BUY",
+    "price": 2450.0,
+    "stop_loss": 2420.0,
+    "target": 2510.0,
+    "quantity": 10,
+    "order_id": "TEST_ORDER_123",
+    "execution_status": "complete",
+    "execution_reason": null,
+    "signal_reason": "Test signal",
+    "metadata": {}
+  },
+  {
+    "timestamp": "2025-12-02T07:47:26.602450",
+    "symbol": "RELIANCE",
+    "instrument_token": 738561,
+    "signal_type": "BUY",
+    "price": 2450.0,
+    "stop_loss": 2420.0,
+    "target": 2510.0,
+    "quantity": 10,
+    "order_id": "TEST_ORDER_123",
+    "execution_status": "complete",
+    "execution_reason": null,
+    "signal_reason": "Test signal",
+    "metadata": {}
+  }
+]

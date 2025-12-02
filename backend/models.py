@@ -1,9 +1,10 @@
 # backend/models.py
 from pydantic import BaseModel
-from typing import Optional
-from dataclasses import dataclass
+from typing import Optional, Dict, Any
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from enum import Enum
+import json
 
 
 class AccessData(BaseModel):
@@ -39,6 +40,31 @@ class Signal:
     quantity: Optional[int] = None
     stop_loss: Optional[float] = None
     target: Optional[float] = None
+    metadata: Optional[Dict[str, Any]] = field(default_factory=dict)
+    
+    def to_json(self) -> str:
+        """Convert to JSON string for Redis publishing"""
+        data = {
+            "symbol": self.symbol,
+            "instrument_token": self.instrument_token,
+            "signal_type": self.signal_type.value if isinstance(self.signal_type, SignalType) else self.signal_type,
+            "price": self.price,
+            "timestamp": self.timestamp.isoformat(),
+            "reason": self.reason,
+            "quantity": self.quantity,
+            "stop_loss": self.stop_loss,
+            "target": self.target,
+            "metadata": self.metadata or {}
+        }
+        return json.dumps(data)
+    
+    @classmethod
+    def from_json(cls, json_str: str) -> "Signal":
+        """Create Signal from JSON string"""
+        data = json.loads(json_str)
+        data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        data['signal_type'] = SignalType(data['signal_type'])
+        return cls(**data)
 
 
 @dataclass

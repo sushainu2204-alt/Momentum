@@ -318,12 +318,17 @@ class PositionManager:
     # KITE API WRAPPERS
     # ================================================================
     
-    async def _get_kite_positions_cached(self) -> List[Dict]:
-        """Get positions with 2-second cache"""
+    async def _get_kite_positions_cached(self, cache_ttl: float = 0.5) -> List[Dict]:
+        """
+        Get positions with short cache to reduce API calls while preventing duplicates.
+        
+        Args:
+            cache_ttl: Cache time-to-live in seconds (default 0.5s for fast trading)
+        """
         now = datetime.now()
         
-        # Use cache if less than 2 seconds old
-        if self._cache_timestamp and (now - self._cache_timestamp).total_seconds() < 2:
+        # Use cache if less than cache_ttl seconds old
+        if self._cache_timestamp and (now - self._cache_timestamp).total_seconds() < cache_ttl:
             return list(self._position_cache.values())
         
         # Fetch fresh from Kite
