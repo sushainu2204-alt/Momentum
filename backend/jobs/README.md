@@ -67,6 +67,7 @@ The trading system uses a hybrid architecture where Kite API is the source of tr
 
 ```python
 from backend.jobs import SyncJobsScheduler
+from backend.core.services import OrderManager, PositionManager, CapitalManager, SignalExecutor
 
 # Create scheduler with services
 scheduler = SyncJobsScheduler(

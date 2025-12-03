@@ -3,7 +3,7 @@
 ## Project Context
 
 Clean up and update the documentations if something has changed in the codebase. 
-Do not cretae unncessary run files/test files/documenttaion. Lets keep them crisp and to the point.
+Do not create unnecessary run files/test files/documentation. Lets keep them crisp and to the point.
 Make sure the files are present in right folders.
 
 Python-based trading system using:
@@ -13,16 +13,60 @@ Python-based trading system using:
 
 ---
 
-## Architecture Principles
-
-### Layer Separation
+## Project Structure
 
 ```
-infrastructure/     ← External dependencies (DB, APIs, cache, messaging)
-core/              ← Business logic (NO external dependencies)
-workers/           ← Background jobs/workers
-models/            ← Domain models
-api/               ← REST API endpoints
+Momentum/
+├── backend/                    # 🚀 PRODUCTION CODE ONLY
+│   ├── api/                   # REST API endpoints
+│   ├── config/                # Application configuration
+│   ├── core/                  # Business logic (NO external deps)
+│   │   ├── config/           # Strategy configurations
+│   │   ├── indicators/       # Technical indicators
+│   │   ├── models/           # Domain models
+│   │   ├── services/         # Application services
+│   │   ├── strategies/       # Trading strategies
+│   │   └── utils/            # Utility functions
+│   ├── infrastructure/        # External dependencies
+│   │   ├── cache/            # Caching (Redis)
+│   │   ├── data_sources/     # NSE, Zerodha APIs
+│   │   ├── database/         # PostgreSQL, repositories
+│   │   └── messaging/        # Redis pub/sub
+│   ├── jobs/                  # Scheduled sync jobs
+│   ├── workers/               # Strategy workers
+│   └── main.py               # FastAPI entry point
+│
+├── non-prod/                  # 🧪 NON-PRODUCTION CODE
+│   ├── tests/                 # All test files
+│   │   ├── unit/             # Unit tests
+│   │   ├── integration/      # Integration tests
+│   │   └── e2e/              # End-to-end tests
+│   ├── scripts/              # Dev/utility scripts
+│   │   ├── debug/            # Debug scripts
+│   │   ├── manual/           # Manual test scripts
+│   │   └── validation/       # Architecture validation
+│   ├── tools/                # Development tools
+│   │   └── backtesting/      # Backtesting engine
+│   └── docs/                 # Documentation
+│
+├── signals/                   # Generated trading signals
+├── orders/                    # Order logs
+└── logs/                      # Application logs
+```
+
+---
+
+## Architecture Principles
+
+### Layer Separation (Production Code in backend/)
+
+```
+backend/
+├── infrastructure/     ← External dependencies (DB, APIs, cache, messaging)
+├── core/              ← Business logic (NO external dependencies)
+├── workers/           ← Background jobs/workers
+├── models.py          ← Domain models
+└── api/               ← REST API endpoints
 ```
 
 **Critical Rule**: Core business logic must NEVER directly import external libraries (psycopg2, requests, etc.). Always use abstraction layers in `infrastructure/`.
@@ -223,16 +267,21 @@ class IDatabase(ABC):
 
 | Type | Location | Example |
 |------|----------|---------|
-| Database interface | `infrastructure/database/base.py` | `IDatabase` |
-| Database implementation | `infrastructure/database/<name>.py` | `postgres.py` |
-| Repository | `infrastructure/database/<entity>_repository.py` | `signal_repository.py` |
-| External API client | `infrastructure/data_sources/<name>.py` | `nse_data_source.py` |
-| Business service | `core/services/<name>.py` | `signal_storage.py` |
-| Trading strategy | `core/strategies/<name>.py` | `vwap_breakout.py` |
-| Strategy config | `core/config/strategy_config.py` | Config classes |
-| Domain model | `models/<name>.py` | `Signal`, `Candidate` |
-| Worker | `workers/<name>_worker.py` | `vwap_breakout_worker.py` |
-| API endpoint | `api/routes/<name>.py` | Trading routes |
+| Database interface | `backend/infrastructure/database/base.py` | `IDatabase` |
+| Database implementation | `backend/infrastructure/database/<name>.py` | `postgres.py` |
+| Repository | `backend/infrastructure/database/<entity>_repository.py` | `signal_repository.py` |
+| External API client | `backend/infrastructure/data_sources/<name>.py` | `nse_data_source.py` |
+| Business service | `backend/core/services/<name>.py` | `signal_storage.py` |
+| Trading strategy | `backend/core/strategies/<name>.py` | `vwap_breakout.py` |
+| Strategy config | `backend/core/config/strategy_config.py` | Config classes |
+| Domain model | `backend/models.py` | `Signal`, `Candidate` |
+| Worker | `backend/workers/<name>_worker.py` | `vwap_breakout_worker.py` |
+| API endpoint | `backend/api/routes.py` | Trading routes |
+| Unit tests | `non-prod/tests/unit/test_<name>.py` | `test_strategies.py` |
+| Integration tests | `non-prod/tests/integration/test_<name>.py` | `test_trading_system.py` |
+| Debug scripts | `non-prod/scripts/debug/<name>.py` | `debug_vwap_filters.py` |
+| Backtesting | `non-prod/tools/backtesting/<name>.py` | `engine.py` |
+| Documentation | `non-prod/docs/<name>.md` | `ARCHITECTURE.md` |
 
 ### Common Mistakes
 

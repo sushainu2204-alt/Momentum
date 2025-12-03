@@ -6,16 +6,26 @@ Clean architecture trading system with order execution and position management.
 
 ```
 backend/
-├── infrastructure/          # External dependencies
-│   ├── database/           # PostgreSQL + repositories
-│   └── data_sources/       # NSE, Zerodha APIs
+├── config/                 # All configurations
+│   ├── settings.py        # Environment settings
+│   ├── strategy_config.py # Strategy configurations
+│   └── operational_config.py # Broker limits, trading hours
 ├── core/                   # Business logic
-│   ├── services/           # Order, Position, Capital, Signal execution
-│   ├── strategies/         # Trading strategies
-│   └── config/             # Configuration
-├── workers/                # Background workers
-├── jobs/                   # Sync jobs (orders, positions, margins)
-└── api/                    # REST API
+│   ├── services/          # Organized service modules
+│   │   ├── trading/       # Order, Position, Capital management
+│   │   ├── market/        # Kite API, market data, stock screening
+│   │   └── storage/       # Signal persistence
+│   ├── strategies/        # Trading strategies
+│   └── indicators/        # Technical indicators
+├── infrastructure/         # External dependencies
+│   ├── database/          # PostgreSQL + repositories
+│   ├── data_sources/      # NSE, Zerodha APIs
+│   └── cache/             # Redis caching
+├── jobs/                   # Background jobs
+│   ├── sync/              # Sync jobs (orders, positions, margins)
+│   └── strategy/          # Strategy workers
+├── models.py              # Domain models
+└── api/                   # REST API
 ```
 
 ## Database
@@ -41,16 +51,14 @@ docker exec momentum-postgres-1 psql -U appuser -d appdb -f /path/to/schema.sql
 Workers generate signals saved to files/DB. No execution.
 
 ```bash
-cd workers && python run_workers.py
-# Select option 1
+python -m backend.jobs.strategy.run_strategy vwap_breakout --mode signals
 ```
 
 ### 2. Paper Trading
 Full execution system without real orders. Validates all guardrails.
 
 ```bash
-cd workers && python run_workers.py
-# Select option 2
+python -m backend.jobs.strategy.run_strategy vwap_breakout --mode paper
 ```
 
 Monitor: Check `trade_logs` table for all decisions.
@@ -59,24 +67,18 @@ Monitor: Check `trade_logs` table for all decisions.
 ⚠️ **Real money**. Start small (₹10k-₹25k). Active monitoring required.
 
 ```bash
-cd workers && python run_workers.py
-# Select option 3, type "CONFIRM"
+python -m backend.jobs.strategy.run_strategy vwap_breakout --mode live
+# Type "CONFIRM" when prompted
 ```
 
 ## Testing
 
 ```bash
-# Database setup verification
-python -m backend.tests.test_database_setup
+# Run all unit tests
+cd non-prod && pytest tests/unit/
 
-# Mock integration tests
-python -m backend.tests.test_managers_integration
-
-# Live API tests (requires valid Kite token)
-python -m backend.tests.test_live_integration
-
-# Sync jobs tests
-python -m backend.tests.test_sync_jobs
+# Run integration tests
+cd non-prod && pytest tests/integration/
 ```
 
 ## Configuration
@@ -106,4 +108,4 @@ REDIS_URL=redis://localhost:6379/0
 3. Review `trade_logs` for decision quality
 4. Start live with small capital when confident
 
-See `ARCHITECTURE.md` for detailed design patterns.
+See `non-prod/docs/ARCHITECTURE.md` for detailed design patterns.

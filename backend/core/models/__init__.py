@@ -1,7 +1,23 @@
-"""Data models"""
-from .tick import Tick
-from .trade import Trade
-# Re-export Signal and SignalType from the canonical location
-from backend.models import Signal, SignalType
+"""
+Domain Models
 
-__all__ = ["Tick", "Signal", "SignalType", "Trade"]
+Core domain models for the trading system.
+"""
+from .enums import SignalType, PositionStatus, OrderStatus, OrderType
+from .signal import Signal
+from .candidate import Candidate
+from .position import Position
+from .api import AccessData
+
+__all__ = [
+    # Enums
+    "SignalType",
+    "PositionStatus",
+    "OrderStatus",
+    "OrderType",
+    # Models
+    "Signal",
+    "Candidate",
+    "Position",
+    "AccessData",
+]

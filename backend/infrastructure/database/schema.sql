@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS positions (
     target DECIMAL(10, 2) NOT NULL,
     original_stop_loss DECIMAL(10, 2),   -- Original SL before trailing (NULL if no trailing)
     highest_price DECIMAL(10, 2),        -- Highest price reached (for trailing SL calculation)
+    -- NOTE: modification_count is tracked on the orders table (sl_order_id references it)
     
     -- Current state
     current_price DECIMAL(10, 2),
@@ -84,6 +85,9 @@ CREATE TABLE IF NOT EXISTS orders (
     -- Relationships
     position_id INTEGER REFERENCES positions(id),
     signal_id INTEGER,
+    
+    -- Order modification tracking (Zerodha allows max 25 per order, we recreate at 20)
+    modification_count INTEGER DEFAULT 0,  -- How many times this SL order was modified
     
     -- Metadata
     metadata JSONB

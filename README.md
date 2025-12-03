@@ -6,10 +6,37 @@ A production-ready algorithmic trading system for Zerodha Kite built with **clea
 
 - **Getting Started**: See [Quick Start](#-quick-start) below
 - **Backtesting**: [Backtest Your Strategy](#-backtesting)
-- **Testing**: [TESTING.md](TESTING.md) - Complete testing guide
-- **Architecture**: [ARCHITECTURE.md](ARCHITECTURE.md) - System design details
-- **Maintenance**: [MAINTENANCE_TODO.md](MAINTENANCE_TODO.md) - Recurring tasks and checklists
-- **Technical Fixes**: [CODE_ANALYSIS_AND_FIXES.md](CODE_ANALYSIS_AND_FIXES.md) - Bug fixes and validations
+- **Testing**: [non-prod/docs/TESTING.md](non-prod/docs/TESTING.md) - Complete testing guide
+- **Architecture**: [non-prod/docs/ARCHITECTURE.md](non-prod/docs/ARCHITECTURE.md) - System design details
+
+## 📁 Project Structure
+
+```
+Momentum/
+├── backend/                    # 🚀 PRODUCTION CODE
+│   ├── api/                   # REST API endpoints
+│   ├── config/                # Application configuration
+│   ├── core/                  # Business logic (NO external deps)
+│   │   ├── services/         # Application services
+│   │   ├── strategies/       # Trading strategies
+│   │   └── models/           # Domain models
+│   ├── infrastructure/        # External dependencies
+│   │   ├── database/         # PostgreSQL, repositories
+│   │   ├── data_sources/     # NSE, Zerodha APIs
+│   │   └── messaging/        # Redis pub/sub
+│   ├── jobs/                  # Scheduled sync jobs
+│   └── workers/               # Strategy workers
+│
+├── non-prod/                  # 🧪 NON-PRODUCTION CODE
+│   ├── tests/                 # Unit/Integration/E2E tests
+│   ├── scripts/              # Debug, validation scripts
+│   ├── tools/backtesting/    # Backtesting engine
+│   └── docs/                 # Documentation
+│
+├── signals/                   # Generated trading signals
+├── orders/                    # Order logs
+└── logs/                      # Application logs
+```
 
 ## 📊 What's Inside
 

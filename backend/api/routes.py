@@ -1,37 +1,70 @@
 """
 API Routes
-Handles OAuth flow and ticker management.
+
+Handles OAuth flow.
+Uses dependency injection for proper state management.
 """
-import threading
-from fastapi import APIRouter, Request
+import logging
+from functools import lru_cache
+from typing import Optional
+
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
+
 from backend.config import settings
 from backend.core.services import KiteService
-from backend.core.models import Tick
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Global kite service instance
-kite_service: KiteService = None
-ticker_thread: threading.Thread = None
+
+# ================================================================
+# DEPENDENCY INJECTION
+# ================================================================
+
+class KiteServiceManager:
+    """
+    Singleton manager for KiteService instance.
+    Provides proper lifecycle management for the Kite service.
+    """
+    
+    _instance: Optional[KiteService] = None
+    
+    @classmethod
+    def get_service(cls) -> Optional[KiteService]:
+        """Get or create KiteService instance."""
+        if cls._instance is None:
+            try:
+                cls._instance = KiteService()
+                logger.info("KiteService initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize KiteService: {e}")
+                return None
+        return cls._instance
 
 
-def init_kite_service():
-    """Initialize Kite service"""
-    global kite_service
-    kite_service = KiteService()
+def get_kite_service() -> Optional[KiteService]:
+    """Dependency for getting KiteService instance."""
+    return KiteServiceManager.get_service()
 
+
+# ================================================================
+# ROUTES
+# ================================================================
 
 @router.get("/connect")
-async def connect():
+async def connect(
+    kite_service: Optional[KiteService] = Depends(get_kite_service)
+):
     """
     Get Zerodha login URL for OAuth flow.
     User should visit this URL to authenticate.
     """
     if not kite_service:
         return JSONResponse(
-            {"error": "Kite service not initialized"},
+            {"error": "Kite service not initialized. Check API credentials."},
             status_code=500
         )
     
@@ -43,11 +76,20 @@ async def connect():
 
 
 @router.get("/callback")
-async def callback(request: Request):
+async def callback(
+    request: Request,
+    kite_service: Optional[KiteService] = Depends(get_kite_service)
+):
     """
     OAuth callback endpoint.
     Zerodha redirects here with request_token after user authentication.
     """
+    if not kite_service:
+        return JSONResponse(
+            {"error": "Kite service not initialized"},
+            status_code=500
+        )
+    
     request_token = request.query_params.get("request_token")
     
     if not request_token:
@@ -60,42 +102,17 @@ async def callback(request: Request):
         # Exchange request token for access token
         session_data = kite_service.generate_session(request_token)
         
-        print(f"✓ Authentication successful")
-        print(f"  User ID: {session_data.get('user_id')}")
-        print(f"  Access token saved to .env")
-        
-        # TODO: Uncomment below to enable tick streaming to Redis
-        # Start ticker in background thread
-        # def start_ticker_background():
-        #     """Start ticker for NIFTY 50"""
-        #     instruments = [256265]  # NIFTY 50
-        #     
-        #     def on_tick(ticks: list[Tick]):
-        #         """Callback for tick processing"""
-        #         for tick in ticks:
-        #             print(f"📊 Tick: {tick.instrument_token} @ ₹{tick.last_price:.2f}")
-        #     
-        #     kite_service.start_ticker(
-        #         instruments=instruments,
-        #         on_tick_callback=on_tick
-        #     )
-        # 
-        # global ticker_thread
-        # ticker_thread = threading.Thread(target=start_ticker_background, daemon=True)
-        # ticker_thread.start()
+        logger.info(f"Authentication successful for user: {session_data.get('user_id')}")
         
         return JSONResponse({
             "status": "success",
             "user_id": session_data.get("user_id"),
             "user_name": session_data.get("user_name"),
-            "message": "Authentication successful."
+            "message": "Authentication successful. Access token saved to .env"
         })
         
     except Exception as e:
-        print(f"⚠ Callback error: {e}")
-        import traceback
-        traceback.print_exc()
-        
+        logger.error(f"Callback error: {e}", exc_info=True)
         return JSONResponse(
             {"error": str(e)},
             status_code=500
@@ -107,6 +124,5 @@ async def health():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "service": "Momentum Trading Backend",
-        "ticker_active": ticker_thread is not None and ticker_thread.is_alive()
+        "service": "Momentum Trading API"
     }

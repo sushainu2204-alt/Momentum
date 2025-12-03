@@ -23,10 +23,13 @@ from typing import Optional
 from datetime import datetime, time
 import pandas as pd
 import numpy as np
+import logging
 
 from backend.core.strategies.base import BaseStrategy
-from backend.core.config.strategy_config import VWAPEMABreakoutConfig
-from backend.models import Candidate, Signal, SignalType, Position
+from backend.config import VWAPEMABreakoutConfig
+from backend.core.models import Candidate, Signal, SignalType, Position
+
+logger = logging.getLogger(__name__)
 
 
 class VWAPEMABreakoutStrategy(BaseStrategy):
@@ -53,9 +56,7 @@ class VWAPEMABreakoutStrategy(BaseStrategy):
     
     def __init__(self, config: VWAPEMABreakoutConfig):
         """Initialize strategy with configuration"""
-        self.config = config
-        self.name = config.name
-        self.description = config.description
+        super().__init__(config)
     
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -196,43 +197,35 @@ class VWAPEMABreakoutStrategy(BaseStrategy):
         Returns:
             True if all filters pass
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         # Filter 1: Price range (2-4%)
         gain_pass, gain_info = self._check_price_range_detailed(candidate)
+        self._log_filter_result(candidate.symbol, "Gain Filter", gain_pass, gain_info)
         if not gain_pass:
-            logger.debug(f"{candidate.symbol}: ❌ Gain Filter - {gain_info}")
             return False
-        logger.debug(f"{candidate.symbol}: ✅ Gain Filter - {gain_info}")
         
         # Filter 2: VWAP
         vwap_pass, vwap_info = self._check_vwap_filter_detailed(stock_df)
+        self._log_filter_result(candidate.symbol, "VWAP Filter", vwap_pass, vwap_info)
         if not vwap_pass:
-            logger.debug(f"{candidate.symbol}: ❌ VWAP Filter - {vwap_info}")
             return False
-        logger.debug(f"{candidate.symbol}: ✅ VWAP Filter - {vwap_info}")
         
         # Filter 3: EMA
         ema_pass, ema_info = self._check_ema_filter_detailed(stock_df)
+        self._log_filter_result(candidate.symbol, "EMA Filter", ema_pass, ema_info)
         if not ema_pass:
-            logger.debug(f"{candidate.symbol}: ❌ EMA Filter - {ema_info}")
             return False
-        logger.debug(f"{candidate.symbol}: ✅ EMA Filter - {ema_info}")
         
         # Filter 4: Volume
         volume_pass, volume_info = self._check_volume_surge_detailed(stock_df)
+        self._log_filter_result(candidate.symbol, "Volume Filter", volume_pass, volume_info)
         if not volume_pass:
-            logger.debug(f"{candidate.symbol}: ❌ Volume Filter - {volume_info}")
             return False
-        logger.debug(f"{candidate.symbol}: ✅ Volume Filter - {volume_info}")
         
         # Filter 5: Breakout of previous high
         breakout_pass, breakout_info = self._check_breakout_previous_high_detailed(stock_df)
+        self._log_filter_result(candidate.symbol, "Breakout Filter", breakout_pass, breakout_info)
         if not breakout_pass:
-            logger.debug(f"{candidate.symbol}: ❌ Breakout Filter - {breakout_info}")
             return False
-        logger.debug(f"{candidate.symbol}: ✅ Breakout Filter - {breakout_info}")
         
         return True
     
@@ -335,31 +328,10 @@ class VWAPEMABreakoutStrategy(BaseStrategy):
         
         return None
     
-    def calculate_position_size(
-        self,
-        capital: float,
-        current_price: float
-    ) -> int:
-        """
-        Calculate position size based on capital and price.
-        
-        Args:
-            capital: Available capital
-            current_price: Current stock price
-        
-        Returns:
-            Number of shares to buy
-        """
-        position_value = capital * self.config.position_size_pct
-        quantity = int(position_value / current_price)
-        return max(1, quantity)
-    
     def _is_entry_allowed(self, current_time: datetime) -> bool:
         """Check if entry is allowed at current time"""
-        current = current_time.time()
-        return (
-            self.config.market_open_time <= current <= self.config.no_entry_after
-        )
+        # Use base class implementation
+        return super()._is_entry_allowed(current_time)
     
     def generate_signal(
         self,

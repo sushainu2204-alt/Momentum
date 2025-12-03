@@ -9,7 +9,7 @@ from datetime import datetime, date
 import logging
 
 from .base import IDatabase
-from backend.models import Position, PositionStatus
+from backend.core.models import Position, PositionStatus
 
 logger = logging.getLogger(__name__)
 

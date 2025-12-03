@@ -25,7 +25,6 @@ class Settings:
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://appuser:secret@localhost:5432/appdb")
     
     # Redis Channels
-    TICKS_CHANNEL_PATTERN: str = "ticks:*"
     SIGNALS_CHANNEL: str = "signals"
     
     # Strategy defaults

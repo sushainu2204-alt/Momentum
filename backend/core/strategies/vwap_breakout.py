@@ -13,11 +13,14 @@ from typing import Optional
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import logging
 
 from backend.core.strategies.base import BaseStrategy
-from backend.core.config import VWAPBreakoutConfig
+from backend.config import VWAPBreakoutConfig
 from backend.core.indicators import TechnicalIndicators
-from backend.models import Signal, SignalType, Candidate, Position
+from backend.core.models import Signal, SignalType, Candidate, Position
+
+logger = logging.getLogger(__name__)
 
 
 class VWAPBreakoutStrategy(BaseStrategy):
@@ -42,9 +45,7 @@ class VWAPBreakoutStrategy(BaseStrategy):
         Args:
             config: Strategy configuration
         """
-        self.config = config
-        self.name = config.name
-        self.description = config.description
+        super().__init__(config)
     
     def apply_filters(
         self,
@@ -61,22 +62,17 @@ class VWAPBreakoutStrategy(BaseStrategy):
         Returns:
             True if all filters pass
         """
-        import logging
-        logger = logging.getLogger(__name__)
-        
         # Filter 1: Price above VWAP
         vwap_pass, vwap_info = self._check_vwap_breakout_detailed(candidate, stock_df)
+        self._log_filter_result(candidate.symbol, "VWAP Filter", vwap_pass, vwap_info)
         if not vwap_pass:
-            logger.debug(f"{candidate.symbol}: ❌ VWAP Filter - {vwap_info}")
             return False
-        logger.debug(f"{candidate.symbol}: ✅ VWAP Filter - {vwap_info}")
         
         # Filter 2: Volume confirmation
         volume_pass, volume_info = self._check_volume_surge_detailed(stock_df)
+        self._log_filter_result(candidate.symbol, "Volume Filter", volume_pass, volume_info)
         if not volume_pass:
-            logger.debug(f"{candidate.symbol}: ❌ Volume Filter - {volume_info}")
             return False
-        logger.debug(f"{candidate.symbol}: ✅ Volume Filter - {volume_info}")
         
         return True
     
@@ -248,53 +244,8 @@ class VWAPBreakoutStrategy(BaseStrategy):
     
     def _is_entry_allowed(self, current_time: datetime) -> bool:
         """Check if entry is allowed at current time"""
-        # Create cutoff times - ensure same timezone as current_time
-        entry_cutoff = datetime.combine(current_time.date(), self.config.no_entry_after)
-        market_open = datetime.combine(current_time.date(), self.config.market_open_time)
-        
-        # If current_time is timezone-aware, make cutoff times timezone-aware too
-        if current_time.tzinfo is not None:
-            entry_cutoff = entry_cutoff.replace(tzinfo=current_time.tzinfo)
-            market_open = market_open.replace(tzinfo=current_time.tzinfo)
-        
-        return market_open <= current_time <= entry_cutoff
-    
-    def calculate_position_size(self, capital: float, price: float) -> int:
-        """
-        Calculate position size based on capital and price.
-        
-        Args:
-            capital: Available capital
-            price: Stock price
-        
-        Returns:
-            Number of shares to buy
-        """
-        position_capital = capital * self.config.position_size_pct
-        quantity = int(position_capital / price)
-        
-        return max(1, quantity)
-    
-    def calculate_indicators(self, prices: pd.Series) -> tuple:
-        """
-        Calculate indicators (required by BaseStrategy interface).
-        Not used in this strategy - filters are applied in apply_filters().
-        """
-        return ()
-    
-    def generate_signal(self, current_indicators: tuple, previous_indicators: tuple) -> Optional[str]:
-        """
-        Generate signal (required by BaseStrategy interface).
-        Not used in this strategy - signals generated in should_enter()/should_exit().
-        """
-        return None
-    
-    def calculate_signals_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calculate signals for entire DataFrame (required for backtesting).
-        Not used in this strategy - uses multi-position backtest engine.
-        """
-        return df
+        # Use base class implementation
+        return super()._is_entry_allowed(current_time)
     
     @property
     def min_data_points(self) -> int:

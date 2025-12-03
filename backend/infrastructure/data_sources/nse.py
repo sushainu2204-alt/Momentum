@@ -3,6 +3,7 @@ NSE Data Source
 
 Fetches top gainers/losers from NSE India API.
 Uses aiohttp for async HTTP calls to avoid blocking the event loop.
+Implements async context manager for proper resource cleanup.
 """
 
 from typing import List, Dict, Optional
@@ -31,7 +32,7 @@ class NSETopGainer:
     total_traded_value: float
     year_high: float
     year_low: float
-    timestamp: datetime = None
+    timestamp: Optional[datetime] = None
     
     def __post_init__(self):
         if self.timestamp is None:
@@ -42,9 +43,19 @@ class NSEDataSource:
     """
     NSE India API data source for top gainers/losers.
     
+    Implements async context manager for proper resource cleanup.
+    
     Usage:
+        # Using context manager (recommended)
+        async with NSEDataSource() as nse:
+            gainers = await nse.get_top_gainers()
+        
+        # Manual management
         nse = NSEDataSource()
-        gainers = await nse.get_top_gainers()
+        try:
+            gainers = await nse.get_top_gainers()
+        finally:
+            await nse.close()
     """
     
     BASE_URL = "https://www.nseindia.com"
@@ -62,8 +73,18 @@ class NSEDataSource:
         self._session: Optional[aiohttp.ClientSession] = None
         self._cookies_initialized = False
     
+    async def __aenter__(self) -> "NSEDataSource":
+        """Enter async context manager."""
+        await self._get_session()  # Ensure session is created
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit async context manager and cleanup resources."""
+        await self.close()
+        return None  # Don't suppress exceptions
+    
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create aiohttp session"""
+        """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=30)
             self._session = aiohttp.ClientSession(
@@ -72,8 +93,8 @@ class NSEDataSource:
             )
         return self._session
     
-    async def _init_cookies(self):
-        """Initialize session by visiting homepage to get cookies"""
+    async def _init_cookies(self) -> None:
+        """Initialize session by visiting homepage to get cookies."""
         if self._cookies_initialized:
             return
         
@@ -82,15 +103,17 @@ class NSEDataSource:
             async with session.get(self.BASE_URL) as response:
                 await response.read()  # Read response to complete request
                 self._cookies_initialized = True
+                logger.debug("NSE session cookies initialized")
         except Exception as e:
             logger.warning(f"Could not initialize NSE session: {e}")
     
-    async def close(self):
-        """Close the aiohttp session"""
+    async def close(self) -> None:
+        """Close the aiohttp session and cleanup resources."""
         if self._session and not self._session.closed:
             await self._session.close()
             self._session = None
             self._cookies_initialized = False
+            logger.debug("NSEDataSource session closed")
     
     async def _fetch_gainers_data(self, url: str) -> dict:
         """Internal method to fetch gainers data with retry support"""

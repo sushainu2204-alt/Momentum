@@ -1,0 +1,68 @@
+# ============================================================================
+# Docker Ignore File - Momentum Trading System
+# ============================================================================
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+*.egg-info/
+.eggs/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Non-production code (when building production image)
+non-prod/
+
+# Logs and data (mounted as volumes in production)
+logs/
+signals/
+orders/
+*.log
+
+# Environment files (should be injected as env vars or secrets)
+.env
+.env.*
+!.env.example
+
+# Test files (excluded from production builds - included in test stage)
+# Note: tests/ is included in development and test stages
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage.xml

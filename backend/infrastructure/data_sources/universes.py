@@ -5,11 +5,14 @@ Pluggable universe definitions for different stock sets.
 Loads from CSV files with hardcoded fallbacks.
 """
 
-from typing import List
-import os
 import csv
+import logging
 from pathlib import Path
+from typing import List
+
 from .base import IStockUniverse, IDataSource, Instrument
+
+logger = logging.getLogger(__name__)
 
 
 class FnOUniverse(IStockUniverse):
@@ -71,7 +74,7 @@ class FnOUniverse(IStockUniverse):
             return symbols if symbols else self.FNO_SYMBOLS_FALLBACK
             
         except Exception as e:
-            print(f"⚠️  Error loading F&O CSV: {e}, using fallback list")
+            logger.warning(f"Error loading F&O CSV: {e}, using fallback list")
             return self.FNO_SYMBOLS_FALLBACK
     
     def get_instruments(self, data_source: IDataSource) -> List[Instrument]:
@@ -154,7 +157,7 @@ class Nifty500Universe(IStockUniverse):
             return symbols if symbols else self.NIFTY_500_SYMBOLS_FALLBACK
             
         except Exception as e:
-            print(f"⚠️  Error loading Nifty 500 CSV: {e}, using fallback list")
+            logger.warning(f"Error loading Nifty 500 CSV: {e}, using fallback list")
             return self.NIFTY_500_SYMBOLS_FALLBACK
     
     def get_instruments(self, data_source: IDataSource) -> List[Instrument]:

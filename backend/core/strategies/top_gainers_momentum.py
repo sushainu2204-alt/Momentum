@@ -16,9 +16,9 @@ from datetime import datetime, time
 import pandas as pd
 
 from backend.core.strategies.base import BaseStrategy
-from backend.core.config import TopGainersMomentumConfig
+from backend.config import TopGainersMomentumConfig
 from backend.core.indicators import TechnicalIndicators, MarketIndicators
-from backend.models import Signal, SignalType, Candidate, Position
+from backend.core.models import Signal, SignalType, Candidate, Position
 from backend.infrastructure.data_sources import Quote
 
 

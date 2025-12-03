@@ -3,8 +3,8 @@ Base Strategy Worker
 
 Abstract base class for all strategy workers.
 Provides common functionality:
-- Market scanning
-- Signal generation
+- Market scanning (via pluggable IScanner)
+- Signal generation (via pluggable BaseStrategy)
 - Signal storage (file/DB)
 - Scheduling
 - Logging
@@ -13,6 +13,7 @@ Each concrete strategy worker extends this class and implements:
 - get_strategy_name()
 - create_strategy()
 - create_config()
+- create_scanner() (optional - defaults to TopGainersScanner)
 """
 
 import asyncio
@@ -28,17 +29,19 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from backend.core.strategies.base import BaseStrategy
-from backend.core.services.signal_storage import SignalStorage
+from backend.core.scanners import IScanner, TopGainersScanner, TopGainersConfig
+from backend.core.services.storage.signal_storage import SignalStorage
 from backend.core.utils.timezone import now_ist, is_market_hours, is_trading_window, get_today_date_str
-from backend.core.services.signal_executor import SignalExecutor
-from backend.core.services.order_manager import OrderManager
-from backend.core.services.position_manager import PositionManager
-from backend.core.services.capital_manager import CapitalManager
+from backend.core.services.trading.signal_executor import SignalExecutor
+from backend.core.services.trading.order_manager import OrderManager
+from backend.core.services.trading.position_manager import PositionManager
+from backend.core.services.trading.capital_manager import CapitalManager
 from backend.infrastructure.data_sources.nse import NSEDataSource
 from backend.infrastructure.data_sources import ZerodhaDataSource
-from backend.core.services.kite_service import KiteService
+from backend.core.services.market.kite_service import KiteService
 from backend.infrastructure.database.factory import create_database
-from backend.models import Candidate, Signal
+from backend.config import DEFAULT_NSE_CONFIG
+from backend.core.models import Candidate, Signal
 from backend.core.logging_config import setup_logging
 
 # Setup logging
@@ -101,6 +104,10 @@ class BaseStrategyWorker(ABC):
         # Initialize strategy
         self.strategy = self.create_strategy()
         
+        # Initialize scanner (pluggable - defaults to TopGainersScanner)
+        self.scanner = self.create_scanner()
+        logger.info(f"Scanner: {self.scanner.get_name()}")
+        
         # Initialize signal storage (always available for backup)
         self.signal_storage = SignalStorage(storage_type="file", base_path="./signals", orders_path="./orders")
         
@@ -149,6 +156,28 @@ class BaseStrategyWorker(ABC):
             Strategy config instance
         """
         pass
+    
+    def create_scanner(self) -> IScanner:
+        """
+        Create and return scanner instance.
+        
+        Override this in subclasses for different scanning strategies.
+        Default: TopGainersScanner with all NSE categories.
+        
+        Returns:
+            Scanner instance implementing IScanner
+        """
+        config = TopGainersConfig(
+            categories=DEFAULT_NSE_CONFIG.valid_categories,
+            min_gain_pct=2.0,
+            max_gain_pct=20.0,
+            max_results=100,
+            deduplicate=True
+        )
+        return TopGainersScanner(
+            nse_data_source=self.nse_data_source,
+            config=config
+        )
     
     def get_trading_limits(self):
         """
@@ -203,7 +232,8 @@ class BaseStrategyWorker(ABC):
             
             self.position_manager = PositionManager(
                 kite_service=self.kite_service,
-                position_repository=position_repo
+                position_repository=position_repo,
+                order_repository=order_repo  # Needed for sync_positions_from_kite to look up sl_order_id
             )
             logger.info("✅ PositionManager initialized")
             
@@ -289,45 +319,24 @@ class BaseStrategyWorker(ABC):
         try:
             logger.info(f"\n[{current_time.strftime('%H:%M:%S')}] 🔍 Scanning market...")
             
-            # Step 1: Get ALL top gainers from ALL categories
-            all_categories = ['allSec', 'FOSec', 'NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'SecGtr20', 'SecLwr20']
-            all_gainers = []
-            seen_symbols = set()
+            # Step 1: Use scanner to find candidates
+            scan_result = await self.scanner.scan()
             
-            for category in all_categories:
-                try:
-                    category_gainers = await self.nse_data_source.get_top_gainers(category=category)
-                    
-                    # Add only unique symbols (avoid duplicates across categories)
-                    for gainer in category_gainers:
-                        if gainer.symbol not in seen_symbols:
-                            all_gainers.append(gainer)
-                            seen_symbols.add(gainer.symbol)
-                    
-                    logger.info(f"  ├─ {category}: {len(category_gainers)} stocks ({len([g for g in category_gainers if g.symbol not in seen_symbols])} unique)")
-                except Exception as e:
-                    logger.warning(f"  ├─ {category}: Failed to fetch - {e}")
-            
-            if not all_gainers:
-                logger.info("No top gainers found in any category")
+            if not scan_result.candidates:
+                logger.info(f"No candidates found by {self.scanner.get_name()}")
                 return
             
-            # Sort by % gain descending
-            all_gainers.sort(key=lambda g: g.pct_change, reverse=True)
+            # Log scan results
+            logger.info(f"📊 {self.scanner.get_name()}: Found {scan_result.total_found} candidates")
+            candidate_symbols = [c.symbol for c in scan_result.candidates]
+            logger.info(f"  └─ Top: {', '.join(candidate_symbols[:10])}{'...' if len(candidate_symbols) > 10 else ''}")
             
-            # Print summary
-            gainer_symbols = [g.symbol for g in all_gainers]
-            logger.info(f"📊 Total Unique Gainers ({len(all_gainers)}): {', '.join(gainer_symbols[:10])}{'...' if len(gainer_symbols) > 10 else ''}")
+            candidates = scan_result.candidates
             
-            top_gainers = all_gainers
-            
-            # Step 2: Convert to candidates
-            candidates = self._convert_to_candidates(top_gainers, current_time)
-            
-            # Step 3: Process candidates and track filtering
+            # Step 2: Process candidates and track filtering
             await self._process_candidates(candidates, current_time)
             
-            # Step 4: Log status
+            # Step 3: Log status
             logger.info(f"Signals generated today: {self.signals_generated}")
             
         except Exception as e:
@@ -342,23 +351,23 @@ class BaseStrategyWorker(ABC):
         self.is_running = False
         
         # Generate report
-        print(f"\n📊 DAILY SUMMARY - {self.get_strategy_name().upper()}:")
-        print(f"  Total Signals Generated: {self.signals_generated}")
+        logger.info(f"DAILY SUMMARY - {self.get_strategy_name().upper()}:")
+        logger.info(f"  Total Signals Generated: {self.signals_generated}")
         
         if self.use_execution:
-            print(f"  ✅ Signals Executed: {self.signals_executed}")
-            print(f"  ⚠️ Signals Ignored: {self.signals_ignored}")
-            print(f"  ❌ Signals Failed: {self.signals_generated - self.signals_executed - self.signals_ignored}")
+            logger.info(f"  Signals Executed: {self.signals_executed}")
+            logger.info(f"  Signals Ignored: {self.signals_ignored}")
+            logger.info(f"  Signals Failed: {self.signals_generated - self.signals_executed - self.signals_ignored}")
             
             # Get execution statistics from SignalExecutor
             if self.signal_executor:
                 try:
                     exec_stats = await self.signal_executor.get_execution_stats()
-                    print(f"\n  Execution Breakdown:")
-                    print(f"    - Total signals processed: {exec_stats.get('total_signals', 0)}")
-                    print(f"    - Orders placed: {exec_stats.get('executed', 0)}")
-                    print(f"    - Signals ignored: {exec_stats.get('ignored', 0)}")
-                    print(f"    - Execution failures: {exec_stats.get('failed', 0)}")
+                    logger.info("  Execution Breakdown:")
+                    logger.info(f"    - Total signals processed: {exec_stats.get('total_signals', 0)}")
+                    logger.info(f"    - Orders placed: {exec_stats.get('executed', 0)}")
+                    logger.info(f"    - Signals ignored: {exec_stats.get('ignored', 0)}")
+                    logger.info(f"    - Execution failures: {exec_stats.get('failed', 0)}")
                 except Exception as e:
                     logger.error(f"Error getting execution stats: {e}")
             
@@ -366,11 +375,11 @@ class BaseStrategyWorker(ABC):
             if self.capital_manager:
                 try:
                     capital_summary = await self.capital_manager.get_capital_summary()
-                    print(f"\n  💰 Capital Summary:")
-                    print(f"    - Starting capital: ₹{capital_summary.get('starting_capital', 0):,.2f}")
-                    print(f"    - Current capital: ₹{capital_summary.get('current_capital', 0):,.2f}")
-                    print(f"    - Total P&L: ₹{capital_summary.get('total_pnl', 0):,.2f}")
-                    print(f"    - Open positions: {capital_summary.get('open_positions', 0)}")
+                    logger.info("  Capital Summary:")
+                    logger.info(f"    - Starting capital: ₹{capital_summary.get('starting_capital', 0):,.2f}")
+                    logger.info(f"    - Current capital: ₹{capital_summary.get('current_capital', 0):,.2f}")
+                    logger.info(f"    - Total P&L: ₹{capital_summary.get('total_pnl', 0):,.2f}")
+                    logger.info(f"    - Open positions: {capital_summary.get('open_positions', 0)}")
                 except Exception as e:
                     logger.error(f"Error getting capital summary: {e}")
         
@@ -379,51 +388,14 @@ class BaseStrategyWorker(ABC):
         report_file = self.signal_storage.export_daily_report(today)
         
         if report_file:
-            print(f"\n  📄 Report saved: {report_file}")
+            logger.info(f"  Report saved: {report_file}")
         
-        print("=" * 70 + "\n")
-        logger.info("✅ Daily report generated")
+        logger.info("=" * 70)
+        logger.info("Daily report generated")
     
     # ================================================================
     # CORE LOGIC
     # ================================================================
-    
-    def _convert_to_candidates(
-        self,
-        top_gainers: List,  # List[NSETopGainer]
-        current_time: datetime
-    ) -> List[Candidate]:
-        """
-        Convert NSE top gainers to Candidate objects.
-        
-        Args:
-            top_gainers: List of NSETopGainer objects from NSE
-            current_time: Current timestamp
-        
-        Returns:
-            List of Candidate objects
-        """
-        candidates = []
-        
-        for gainer in top_gainers:
-            try:
-                candidate = Candidate(
-                    symbol=gainer.symbol,
-                    instrument_token=0,  # Not needed for signal generation
-                    current_price=gainer.last_price,
-                    open_price=gainer.open_price,
-                    high_price=gainer.high_price,
-                    low_price=gainer.low_price,
-                    volume=gainer.volume,
-                    gain_pct=gainer.pct_change,
-                    avg_volume=gainer.volume,  # Will be enriched if needed
-                    timestamp=current_time
-                )
-                candidates.append(candidate)
-            except Exception as e:
-                logger.warning(f"Failed to convert {getattr(gainer, 'symbol', 'unknown')}: {e}")
-        
-        return candidates
     
     async def _process_candidates(
         self,
@@ -494,20 +466,7 @@ class BaseStrategyWorker(ABC):
                         
                         if result.status == "EXECUTED":
                             self.signals_executed += 1
-                            
-                            # Save executed order to separate file
-                            await self.signal_storage.save_executed_order(
-                                signal=signal,
-                                strategy_name=self.get_strategy_name(),
-                                order_id=result.order_id,
-                                quantity=result.quantity,
-                                execution_result={
-                                    "status": result.status,
-                                    "reason": result.reason,
-                                    "metadata": metadata
-                                }
-                            )
-                            
+                            # Order is saved to file via OrderRepository when DB insert happens
                             logger.info(
                                 f"✅ ORDER PLACED: {signal.symbol} x{result.quantity} @ ₹{signal.price:.2f}, "
                                 f"SL: ₹{signal.stop_loss:.2f}, Target: ₹{signal.target:.2f}, "
@@ -675,6 +634,10 @@ class BaseStrategyWorker(ABC):
         # Stop scheduler
         if self.scheduler:
             self.scheduler.shutdown()
+        
+        # Cleanup scanner resources
+        if self.scanner:
+            await self.scanner.close()
         
         # Cleanup NSE data source session
         if self.nse_data_source:
