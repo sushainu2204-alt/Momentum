@@ -187,12 +187,71 @@ class PositionRepository:
         symbol: str,
         status: str = "OPEN"
     ) -> Optional[Dict]:
-        """Get position for symbol"""
+        """Get position for symbol (returns first match - use get_positions_by_symbol for multiple)"""
         result = await self.db.fetch_one(
             "SELECT * FROM positions WHERE symbol = :symbol AND status = :status",
             {"symbol": symbol, "status": status}
         )
         return result
+    
+    async def get_positions_by_symbol(
+        self,
+        symbol: str,
+        status: str = "OPEN"
+    ) -> List[Dict]:
+        """
+        Get ALL positions for a symbol (supports multiple positions per symbol).
+        
+        Use this instead of get_position_by_symbol when:
+        - Multiple positions per symbol are allowed
+        - Need to match Kite positions to DB positions accurately
+        
+        Args:
+            symbol: Trading symbol
+            status: Position status filter (default: OPEN)
+        
+        Returns:
+            List of all matching positions
+        """
+        query = "SELECT * FROM positions WHERE symbol = :symbol AND status = :status ORDER BY entry_time DESC"
+        return await self.db.fetch_all(query, {"symbol": symbol, "status": status})
+    
+    async def get_positions_by_symbols_bulk(
+        self,
+        symbols: List[str],
+        status: str = "OPEN"
+    ) -> Dict[str, List[Dict]]:
+        """
+        Bulk fetch positions for multiple symbols in a single query.
+        
+        Efficient for trailing SL processing where we need to match
+        multiple Kite positions to DB records.
+        
+        Args:
+            symbols: List of trading symbols
+            status: Position status filter
+        
+        Returns:
+            Dict mapping symbol -> list of positions
+        """
+        if not symbols:
+            return {}
+        
+        # Use parameterized IN clause
+        placeholders = ", ".join([f":sym_{i}" for i in range(len(symbols))])
+        query = f"SELECT * FROM positions WHERE symbol IN ({placeholders}) AND status = :status ORDER BY symbol, entry_time DESC"
+        
+        params = {f"sym_{i}": sym for i, sym in enumerate(symbols)}
+        params["status"] = status
+        
+        results = await self.db.fetch_all(query, params)
+        
+        # Group by symbol
+        positions_by_symbol: Dict[str, List[Dict]] = {sym: [] for sym in symbols}
+        for pos in results:
+            positions_by_symbol[pos["symbol"]].append(pos)
+        
+        return positions_by_symbol
     
     async def get_positions_by_date(
         self,

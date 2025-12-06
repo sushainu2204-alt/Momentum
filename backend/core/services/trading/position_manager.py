@@ -247,6 +247,9 @@ class PositionManager:
                 # New position in Kite - create in DB
                 logger.info(f"New position detected in Kite: {symbol} x {quantity}")
                 
+                # Get entry price from Kite position
+                entry_price = kite_pos['average_price']
+                
                 # Look up the entry order to get sl_order_id and strategy
                 sl_order_id = None
                 strategy_name = "UNKNOWN"
@@ -261,6 +264,13 @@ class PositionManager:
                         entry_order_id = entry_order.get('order_id')
                         strategy_name = entry_order.get('strategy_name', 'UNKNOWN')
                         metadata = entry_order.get('metadata', {})
+                        # Handle case where metadata might be a JSON string
+                        if isinstance(metadata, str):
+                            import json
+                            try:
+                                metadata = json.loads(metadata)
+                            except json.JSONDecodeError:
+                                metadata = {}
                         sl_order_id = metadata.get('sl_order_id')
                         stop_loss = metadata.get('stop_loss')
                         target = metadata.get('target')
@@ -269,12 +279,13 @@ class PositionManager:
                             f"SL order: {sl_order_id}"
                         )
                 
-                # Calculate default SL/target if not found
-                entry_price = kite_pos['average_price']
+                # Calculate default SL/target if not found from order metadata
                 if stop_loss is None:
                     stop_loss = entry_price * 0.98  # 2% default SL
+                    logger.warning(f"{symbol}: No SL in order metadata, using default 2%: ₹{stop_loss:.2f}")
                 if target is None:
                     target = entry_price * 1.04  # 4% default target
+                    logger.warning(f"{symbol}: No target in order metadata, using default 4%: ₹{target:.2f}")
                 
                 # Create position record
                 position_id = await self.position_repo.create_position(
@@ -308,11 +319,11 @@ class PositionManager:
                 
                 if kite_pos and kite_pos['quantity'] != 0:
                     # Position still open - update P&L
-                    current_price = kite_pos['last_price']
-                    pnl = kite_pos['pnl']
+                    current_price = float(kite_pos['last_price'])
+                    pnl = float(kite_pos['pnl'])
                     
-                    # Calculate P&L percentage
-                    entry_price = db_pos['entry_price']
+                    # Calculate P&L percentage (convert Decimal to float for math)
+                    entry_price = float(db_pos['entry_price'])
                     pnl_pct = ((current_price - entry_price) / entry_price) * 100
                     
                     await self.position_repo.update_position(
@@ -390,6 +401,14 @@ class PositionManager:
             # Find the most recent entry order
             for order in sorted(orders, key=lambda x: x.get('placed_at', datetime.min), reverse=True):
                 metadata = order.get('metadata', {})
+                # Handle case where metadata might be a JSON string instead of dict
+                if isinstance(metadata, str):
+                    import json
+                    try:
+                        metadata = json.loads(metadata)
+                    except json.JSONDecodeError:
+                        metadata = {}
+                
                 if (order.get('transaction_type') == 'BUY' and 
                     order.get('status') == 'COMPLETE' and
                     metadata.get('order_role') == 'ENTRY'):
@@ -455,7 +474,13 @@ class PositionManager:
         Returns:
             Exit reason: SL_HIT, TARGET_HIT, TIME_EXIT, or MANUAL_EXIT
         """
-        # Define tolerance (±0.5% to account for slippage)
+        # Convert to float for arithmetic (Decimal doesn't multiply with float)
+        exit_price = float(exit_price) if exit_price else 0
+        entry_price = float(entry_price) if entry_price else 0
+        stop_loss = float(stop_loss) if stop_loss else 0
+        target = float(target) if target else 0
+        
+        # Define tolerance (±5% to account for slippage)
         sl_tolerance = abs(stop_loss - entry_price) * 0.05
         target_tolerance = abs(target - entry_price) * 0.05
         

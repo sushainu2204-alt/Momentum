@@ -412,21 +412,33 @@ class OrderManager:
                 db_order = await self.order_repo.get_order(order_id)
                 
                 if db_order:
-                    # Update if status changed
-                    if db_order['status'] != kite_order['status']:
+                    # Check what changed - status OR trigger_price (for SL orders)
+                    status_changed = db_order['status'] != kite_order['status']
+                    trigger_changed = (
+                        kite_order.get('trigger_price') and 
+                        db_order.get('trigger_price') != kite_order.get('trigger_price')
+                    )
+                    
+                    if status_changed or trigger_changed:
                         await self.order_repo.update_order(
                             order_id=order_id,
                             status=kite_order['status'],
                             status_message=kite_order.get('status_message'),
                             filled_quantity=kite_order.get('filled_quantity', 0),
                             average_price=kite_order.get('average_price'),
+                            trigger_price=kite_order.get('trigger_price'),
                             filled_at=datetime.now() if kite_order['status'] == 'COMPLETE' else None
                         )
                         synced_count += 1
                         
-                        logger.debug(
-                            f"Order updated: {order_id} - {kite_order['status']}"
-                        )
+                        if trigger_changed:
+                            logger.debug(
+                                f"Order updated: {order_id} - trigger ₹{kite_order.get('trigger_price')}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Order updated: {order_id} - {kite_order['status']}"
+                            )
                 else:
                     # Order placed outside our system (manual), record it
                     await self.order_repo.create_order(
@@ -668,6 +680,7 @@ class OrderManager:
             logger.error(f"Failed to modify SL order {order_id}: {e}")
             return False, None
     
+    # Why are we creating orders here?????????? Every data should be synced from KIte.
     async def _recreate_sl_order(
         self,
         old_order_id: str,

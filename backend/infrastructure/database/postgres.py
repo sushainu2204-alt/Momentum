@@ -65,6 +65,10 @@ class PostgresDatabase(IDatabase):
             await self.pool.close()
             logger.info("PostgreSQL connection closed")
     
+    async def close(self):
+        """Alias for disconnect() for compatibility"""
+        await self.disconnect()
+    
     async def execute(self, query: str, params: Optional[Dict] = None) -> Any:
         """
         Execute a query without returning results.

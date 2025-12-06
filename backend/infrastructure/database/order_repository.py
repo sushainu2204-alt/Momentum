@@ -154,6 +154,7 @@ class OrderRepository:
         status_message: Optional[str] = None,
         filled_quantity: Optional[int] = None,
         average_price: Optional[float] = None,
+        trigger_price: Optional[float] = None,
         filled_at: Optional[datetime] = None
     ):
         """Update order status in DB and file"""
@@ -167,6 +168,8 @@ class OrderRepository:
             updates["filled_quantity"] = filled_quantity
         if average_price is not None:
             updates["average_price"] = average_price
+        if trigger_price is not None:
+            updates["trigger_price"] = trigger_price
         if filled_at is not None:
             updates["filled_at"] = filled_at
         
@@ -316,19 +319,21 @@ class OrderRepository:
         """
         Increment modification count for an order.
         
+        Note: trigger_price is synced from Kite via sync_orders_from_kite(),
+        this only tracks the modification count.
+        
         Args:
             order_id: Kite order ID
             
         Returns:
             New modification count
         """
-        # First increment
         await self.db.execute(
             "UPDATE orders SET modification_count = modification_count + 1 WHERE order_id = :order_id",
             {"order_id": order_id}
         )
         
-        # Then get new value
+        # Get new value
         result = await self.db.fetch_one(
             "SELECT modification_count FROM orders WHERE order_id = :order_id",
             {"order_id": order_id}

@@ -1,0 +1,136 @@
+version: "3.8"
+
+# =============================================================================
+# Production Docker Compose for Azure VM Deployment
+# =============================================================================
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d --build
+#
+# Required environment variables (in .env file):
+#   - KITE_API_KEY
+#   - KITE_API_SECRET
+#   - KITE_REDIRECT_URL
+#   - KITE_ACCESS_TOKEN (optional, can be set after OAuth)
+#   - POSTGRES_PASSWORD (recommended to change from default)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Redis - In-memory cache and message broker
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: momentum-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"  # Only accessible from localhost
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - momentum-network
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL - Primary database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: momentum-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-appdb}
+      POSTGRES_USER: ${POSTGRES_USER:-appuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "127.0.0.1:5432:5432"  # Only accessible from localhost
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./backend/infrastructure/database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-appdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - momentum-network
+
+  # ---------------------------------------------------------------------------
+  # Backend API - Main application
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: production
+    container_name: momentum-backend
+    restart: always
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-appuser}:${POSTGRES_PASSWORD:-changeme_in_production}@postgres:5432/${POSTGRES_DB:-appdb}
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Zerodha Kite API
+      - KITE_API_KEY=${KITE_API_KEY}
+      - KITE_API_SECRET=${KITE_API_SECRET}
+      - KITE_REDIRECT_URL=${KITE_REDIRECT_URL}
+      - KITE_ACCESS_TOKEN=${KITE_ACCESS_TOKEN:-}
+      
+      # Application settings
+      - ENVIRONMENT=production
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONUNBUFFERED=1
+      
+      # Timezone
+      - TZ=Asia/Kolkata
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - app-signals:/app/signals
+      - app-orders:/app/orders
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - momentum-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  momentum-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes - Persistent data storage
+# =============================================================================
+volumes:
+  redis-data:
+    driver: local
+  pg-data:
+    driver: local
+  app-signals:
+    driver: local
+  app-orders:
+    driver: local

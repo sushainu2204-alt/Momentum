@@ -46,7 +46,6 @@ class NSEConfig:
     # Available categories for top gainers/losers
     valid_categories: List[str] = field(default_factory=lambda: [
         "allSec",       # All Securities (default)
-        "FOSec",        # F&O Securities
         "NIFTY",        # Nifty 50
         "BANKNIFTY",    # Bank Nifty
         "NIFTYNEXT50",  # Nifty Next 50
@@ -55,7 +54,7 @@ class NSEConfig:
     ])
     
     # Default category
-    default_category: str = "FOSec"
+    default_category: str = "allSec"
     
     # API base URL
     base_url: str = "https://www.nseindia.com"

@@ -1,0 +1,48 @@
+[
+  {
+    "order_id": "251205150686977",
+    "symbol": "GROWW",
+    "instrument_token": 194510337,
+    "order_type": "MARKET",
+    "transaction_type": "BUY",
+    "quantity": 1,
+    "price": null,
+    "trigger_price": null,
+    "status": "COMPLETE",
+    "placed_at": "2025-12-05T10:53:04.731624",
+    "metadata": {
+      "signal_reason": "Manual test order",
+      "product": "MIS",
+      "order_role": "ENTRY",
+      "stop_loss": 140.0,
+      "target": 151.2,
+      "sl_order_id": "251205150686988"
+    },
+    "filled_quantity": 1,
+    "average_price": 148.2,
+    "filled_at": "2025-12-05T10:53:05.881669",
+    "updated_at": "2025-12-05T10:53:05.913729"
+  },
+  {
+    "order_id": "251205150686988",
+    "symbol": "GROWW",
+    "instrument_token": 194510337,
+    "order_type": "SL-M",
+    "transaction_type": "SELL",
+    "quantity": 1,
+    "price": null,
+    "trigger_price": 140.0,
+    "status": "COMPLETE",
+    "placed_at": "2025-12-05T10:53:04.752100",
+    "metadata": {
+      "product": "MIS",
+      "order_role": "STOP_LOSS",
+      "parent_order_id": "251205150686977",
+      "modification_count": 0
+    },
+    "filled_quantity": 1,
+    "average_price": 151.4,
+    "filled_at": "2025-12-05T14:10:02.556800",
+    "updated_at": "2025-12-05T14:10:02.570912"
+  }
+]

@@ -1,5 +1,8 @@
 # Maintenance Tasks & Reminders
 
+REMEMBER: 
+1. DO not allow orders on same symbol more than once - becuase we are using trailing stop loss and postions is always one for a symbol befpre square off. (if 2 oders are placed, 2 SL oders gets pplaced which makes it complicated)
+
 TODO:
 1. SHould we use webhook callss to update orders insated of syncing???
 2. Positions automated right now -- test it clearly
@@ -8,6 +11,7 @@ TODO:
 5. check bracket order calculation and placing. focus on the timing...
 6. Check if every file is referring to the proper timestamp
 7. TRailing stop loss, check the config, should it be same for all satrategies/workers??
+8. IMP : ModificationCOunt in Orders table.
 
 
 Order flow TODO's

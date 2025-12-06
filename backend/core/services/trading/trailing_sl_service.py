@@ -94,44 +94,72 @@ class TrailingStopLossService:
         """
         Process all open positions and update trailing stop losses.
         
+        HYBRID APPROACH:
+        - Positions: Read from Kite (source of truth for what's actually open)
+        - Tracking data (highest_price, sl_order_id): Read from DB
+        - SL modifications: Write to Kite
+        
+        IMPORTANT: Kite does NOT provide position IDs!
+        Kite identifies positions by (tradingsymbol + exchange + product).
+        Multiple orders for same symbol are AGGREGATED into one position.
+        
+        MATCHING: We match by symbol. If DB has no matching record, skip that position.
+        
         Returns:
-            Dict with counts: {"checked": N, "updated": N, "errors": N}
+            Dict with counts: {"checked": N, "updated": N, "errors": N, "not_in_db": N}
         """
         if not self.config.enabled:
             logger.debug("Trailing SL disabled, skipping")
-            return {"checked": 0, "updated": 0, "errors": 0}
+            return {"checked": 0, "updated": 0, "errors": 0, "not_in_db": 0}
         
-        stats = {"checked": 0, "updated": 0, "errors": 0}
+        stats = {"checked": 0, "updated": 0, "errors": 0, "not_in_db": 0}
         
         try:
-            # Get all open positions from DB
-            open_positions = await self.position_repo.get_open_positions()
+            # Get LIVE positions from Kite (source of truth)
+            kite_positions = self._get_kite_positions()
             
-            if not open_positions:
-                logger.debug("No open positions to process for trailing SL")
+            # Filter for open positions (quantity != 0)
+            open_kite_positions = [p for p in kite_positions if p['quantity'] != 0]
+            
+            if not open_kite_positions:
+                logger.debug("No open positions in Kite to process for trailing SL")
                 return stats
             
-            logger.debug(f"Processing {len(open_positions)} positions for trailing SL")
+            logger.debug(f"Processing {len(open_kite_positions)} positions from Kite for trailing SL")
             
-            # Get current prices from Kite
-            kite_positions = self._get_kite_positions()
-            kite_price_map = {p['tradingsymbol']: p['last_price'] for p in kite_positions}
-            
-            for position in open_positions:
+            for kite_pos in open_kite_positions:
+                symbol = kite_pos['tradingsymbol']
+                current_price = kite_pos['last_price']
                 stats["checked"] += 1
                 
                 try:
-                    result = await self._process_single_position(position, kite_price_map)
+                    # Get corresponding DB position by symbol
+                    # Note: Kite aggregates all orders for same symbol+product into ONE position
+                    # So we only need to match by symbol
+                    db_position = await self.position_repo.get_position_by_symbol(symbol, status="OPEN")
+                    
+                    if not db_position:
+                        # Position in Kite but not in DB - needs sync
+                        logger.warning(
+                            f"{symbol}: Position in Kite but not in DB - run sync_positions_from_kite()"
+                        )
+                        stats["not_in_db"] += 1
+                        continue
+                    
+                    # Process with combined data: live price from Kite + tracking from DB
+                    result = await self._process_single_position(db_position, current_price)
                     if result:
                         stats["updated"] += 1
+                        
                 except Exception as e:
-                    logger.error(f"Error processing trailing SL for {position['symbol']}: {e}")
+                    logger.error(f"Error processing trailing SL for {symbol}: {e}")
                     stats["errors"] += 1
             
-            if stats["updated"] > 0:
+            if stats["updated"] > 0 or stats["not_in_db"] > 0:
                 logger.info(
                     f"Trailing SL: Checked {stats['checked']}, "
-                    f"Updated {stats['updated']}, Errors {stats['errors']}"
+                    f"Updated {stats['updated']}, Not in DB {stats['not_in_db']}, "
+                    f"Errors {stats['errors']}"
                 )
             
             return stats
@@ -143,10 +171,18 @@ class TrailingStopLossService:
     async def _process_single_position(
         self,
         position: Dict,
-        kite_price_map: Dict[str, float]
+        current_price: float
     ) -> bool:
         """
         Process trailing SL for a single position.
+        
+        Args:
+            position: DB position record (has highest_price, sl_order_id, etc.)
+            current_price: Live price from Kite
+        
+        DB operations (optimized):
+        - 1 write only when SL is actually updated (includes highest_price)
+        - 1 write if SL order is recreated (new order ID)
         
         Returns:
             True if SL was updated, False otherwise
@@ -156,45 +192,42 @@ class TrailingStopLossService:
         entry_price = float(position['entry_price'])
         current_sl = float(position['stop_loss'])
         
-        # Get current price (prefer Kite, fallback to DB)
-        current_price = kite_price_map.get(symbol)
-        if current_price is None:
-            current_price = float(position.get('current_price') or entry_price)
-        
-        # Get or initialize highest_price
+        # Get highest_price from DB (essential persistent state for trailing)
         highest_price = float(position.get('highest_price') or entry_price)
         
-        # Update highest price if current price is higher
+        # Track if highest_price changed (for single batched DB write)
+        highest_price_updated = False
         if current_price > highest_price:
             highest_price = current_price
-            # Update in DB (even if we don't trail yet)
-            await self.position_repo.update_position(
-                position_id=position_id,
-                highest_price=highest_price,
-                current_price=current_price
-            )
+            highest_price_updated = True
         
-        # Check if we should trail
+        # Check if we should trail (based on current profit)
         profit_pct = ((current_price - entry_price) / entry_price) * 100
         
         if profit_pct < self.config.activation_pct:
+            # Not trailing yet, but still persist highest_price if it changed
+            if highest_price_updated:
+                await self.position_repo.update_position(
+                    position_id=position_id,
+                    highest_price=highest_price
+                )
             logger.debug(
                 f"{symbol}: Profit {profit_pct:.2f}% < activation {self.config.activation_pct}%, "
                 f"not trailing yet"
             )
             return False
         
-        # Calculate new trailing SL
+        # Calculate new trailing SL based on highest price reached
         new_sl = highest_price * (1 - self.config.trail_pct / 100)
         
-        # Only update if new SL is higher than current SL
+        # Only update if new SL is higher than current SL (never move down)
         if new_sl <= current_sl:
             logger.debug(
                 f"{symbol}: New SL ₹{new_sl:.2f} <= current SL ₹{current_sl:.2f}, no update"
             )
             return False
         
-        # Check minimum move threshold
+        # Check minimum move threshold (avoid excessive Kite API calls)
         sl_move_pct = ((new_sl - current_sl) / entry_price) * 100
         if sl_move_pct < self.config.min_sl_move_pct:
             logger.debug(
@@ -202,17 +235,18 @@ class TrailingStopLossService:
             )
             return False
         
-        # Get original SL if this is the first trail
+        # Determine original SL (for record keeping on first trail)
         original_sl = position.get('original_stop_loss')
-        if original_sl is None:
+        is_first_trail = original_sl is None
+        if is_first_trail:
             original_sl = current_sl
         
-        # Update SL in database
+        # === SINGLE DB WRITE: Update SL + highest_price together ===
         await self.position_repo.update_trailing_stop_loss(
             position_id=position_id,
             new_stop_loss=round(new_sl, 2),
             highest_price=highest_price,
-            original_stop_loss=original_sl if position.get('original_stop_loss') is None else None
+            original_stop_loss=original_sl if is_first_trail else None
         )
         
         # Modify SL order on Kite (if we have the order ID)
@@ -221,7 +255,7 @@ class TrailingStopLossService:
             new_order_id = await self._modify_sl_order_on_kite(
                 sl_order_id, new_sl, position, position_id
             )
-            # If order was recreated, update the position with new order ID
+            # If order was recreated, update position with new order ID
             if new_order_id and new_order_id != sl_order_id:
                 await self.position_repo.update_position(
                     position_id=position_id,
@@ -287,6 +321,7 @@ class TrailingStopLossService:
                         return new_order_id
                     else:
                         # Order was modified, increment count on the ORDER
+                        # Note: trigger_price is synced from Kite via sync_orders_from_kite()
                         if self.order_repo:
                             new_count = await self.order_repo.increment_modification_count(sl_order_id)
                             logger.info(
@@ -307,6 +342,7 @@ class TrailingStopLossService:
                     trigger_price=round(new_trigger_price, 2)
                 )
                 # Increment count if we have order_repo
+                # Note: trigger_price is synced from Kite via sync_orders_from_kite()
                 if self.order_repo:
                     new_count = await self.order_repo.increment_modification_count(sl_order_id)
                     logger.info(

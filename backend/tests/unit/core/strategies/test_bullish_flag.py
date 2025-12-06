@@ -1,376 +1,213 @@
 """
 Unit Tests for Bullish Flag Strategy
 
-Tests for BullishFlagStrategy class.
+Tests the bullish flag pattern detection and trading logic.
 """
 import pytest
-from unittest.mock import Mock, MagicMock
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, time
+from unittest.mock import Mock
 
 from backend.core.strategies.bullish_flag import BullishFlagStrategy
-from backend.core.models import Candidate, Signal
-from backend.core.models.enums import SignalType
+from backend.config import BullishFlagConfig
+from backend.core.models import Candidate
 
 
 class TestBullishFlagStrategy:
     """Test BullishFlagStrategy class."""
     
     @pytest.fixture
-    def strategy(self):
-        """Create strategy instance with default config."""
-        return BullishFlagStrategy()
+    def config(self):
+        """Create default config."""
+        return BullishFlagConfig()
     
     @pytest.fixture
-    def bullish_flag_dataframe(self):
-        """Create dataframe with bullish flag pattern."""
-        dates = pd.date_range(start='2024-01-01', periods=100, freq='5T')
-        
-        # Create flag pattern: strong uptrend (pole) followed by consolidation (flag)
-        pole = np.linspace(100, 120, 30)  # Strong upward move (pole)
-        flag = 120 + np.random.randn(40) * 1  # Consolidation (flag body)
-        breakout = np.linspace(120, 130, 30)  # Breakout
-        
-        close = np.concatenate([pole, flag, breakout])
-        
-        df = pd.DataFrame({
-            'open': close * 0.998,
-            'high': close * 1.01,
-            'low': close * 0.99,
-            'close': close,
-            'volume': np.concatenate([
-                np.full(30, 100000),   # High volume during pole
-                np.full(40, 30000),    # Low volume during flag
-                np.full(30, 80000)     # Increasing volume during breakout
-            ])
-        }, index=dates)
-        
-        return df
+    def strategy(self, config):
+        """Create strategy with default config."""
+        return BullishFlagStrategy(config)
     
     @pytest.fixture
-    def no_flag_dataframe(self):
-        """Create dataframe without flag pattern."""
-        dates = pd.date_range(start='2024-01-01', periods=50, freq='5T')
-        
-        # Sideways movement - no clear pattern
+    def sample_df(self):
+        """Create sample OHLCV DataFrame."""
         np.random.seed(42)
-        close = 100 + np.random.randn(50) * 2
+        n = 50
+        
+        # Create realistic OHLCV data
+        close = [100 + i * 0.2 + np.random.randn() * 0.5 for i in range(n)]
         
         df = pd.DataFrame({
-            'open': close * 0.998,
-            'high': close * 1.01,
-            'low': close * 0.99,
+            'open': [c - np.random.rand() * 0.5 for c in close],
+            'high': [c + np.random.rand() * 1.0 for c in close],
+            'low': [c - np.random.rand() * 1.0 for c in close],
             'close': close,
-            'volume': np.full(50, 50000)
-        }, index=dates)
+            'volume': [100000 + np.random.randint(-20000, 20000) for _ in range(n)]
+        })
+        
+        # Ensure OHLC consistency
+        df['high'] = df[['open', 'high', 'low', 'close']].max(axis=1)
+        df['low'] = df[['open', 'high', 'low', 'close']].min(axis=1)
         
         return df
     
     @pytest.fixture
-    def sample_candidate(self):
+    def candidate(self):
         """Create sample candidate."""
         return Candidate(
-            symbol="RELIANCE",
-            instrument_token=738561,
-            current_price=2500.0,
-            open_price=2450.0,
-            high_price=2520.0,
-            low_price=2440.0,
-            volume=500000,
-            gain_pct=2.0,
+            symbol="TESTSTOCK",
+            instrument_token=123456,
+            current_price=105.0,
+            gain_pct=3.0,
+            volume=150000,
+            avg_volume=100000,
             timestamp=datetime.now()
         )
     
-    def test_strategy_initialization(self, strategy):
-        """Test strategy is initialized correctly."""
-        assert strategy is not None
-        assert hasattr(strategy, 'config') or hasattr(strategy, 'name')
+    def test_strategy_initialization(self, strategy, config):
+        """Test strategy initializes correctly."""
+        assert strategy.config == config
+        assert strategy._flag_high is None
+        assert strategy._flag_low is None
     
     def test_strategy_name(self, strategy):
-        """Test strategy has a name."""
-        name = strategy.get_name() if hasattr(strategy, 'get_name') else getattr(strategy, 'name', 'bullish_flag')
-        assert name is not None
+        """Test strategy has correct name from config."""
+        assert strategy.name == strategy.config.name
     
-    def test_calculate_indicators(self, strategy, bullish_flag_dataframe):
-        """Test calculate_indicators adds relevant columns."""
-        if hasattr(strategy, 'calculate_indicators'):
-            df = strategy.calculate_indicators(bullish_flag_dataframe.copy())
-            
-            assert isinstance(df, pd.DataFrame)
-            # Original columns should be preserved
-            assert 'close' in df.columns
-            assert 'volume' in df.columns
+    def test_min_data_points(self, strategy):
+        """Test min_data_points property."""
+        # min_data_points is calculated from config values
+        expected = max(
+            strategy.config.pullback_candles_max + 10,
+            strategy.config.lookback_candles
+        )
+        assert strategy.min_data_points == expected
     
-    def test_detect_flag_pattern(self, strategy, bullish_flag_dataframe):
-        """Test detect_flag_pattern identifies flag patterns."""
-        if hasattr(strategy, 'detect_flag_pattern'):
-            df = bullish_flag_dataframe.copy()
-            if hasattr(strategy, 'calculate_indicators'):
-                df = strategy.calculate_indicators(df)
-            
-            result = strategy.detect_flag_pattern(df)
-            
-            # Should return boolean or dict with pattern info
-            assert isinstance(result, (bool, dict))
+    def test_detect_flag_pattern_empty_df(self, strategy):
+        """Test pattern detection with empty DataFrame."""
+        empty_df = pd.DataFrame()
+        
+        detected, flag_high, flag_low = strategy.detect_flag_pattern(empty_df)
+        
+        assert detected is False
+        assert flag_high is None
+        assert flag_low is None
     
-    def test_no_flag_pattern_detected(self, strategy, no_flag_dataframe):
-        """Test no flag pattern detected in random data."""
-        if hasattr(strategy, 'detect_flag_pattern'):
-            df = no_flag_dataframe.copy()
-            if hasattr(strategy, 'calculate_indicators'):
-                df = strategy.calculate_indicators(df)
-            
-            result = strategy.detect_flag_pattern(df)
-            
-            # May or may not detect pattern in noisy data
-            assert isinstance(result, (bool, dict))
-    
-    def test_apply_filters(self, strategy, bullish_flag_dataframe, sample_candidate):
-        """Test apply_filters method."""
-        if hasattr(strategy, 'apply_filters'):
-            df = bullish_flag_dataframe.copy()
-            if hasattr(strategy, 'calculate_indicators'):
-                df = strategy.calculate_indicators(df)
-            
-            result = strategy.apply_filters(sample_candidate, df)
-            
-            assert isinstance(result, bool)
-    
-    def test_should_enter_with_flag_pattern(self, strategy, bullish_flag_dataframe, sample_candidate):
-        """Test should_enter with bullish flag pattern."""
-        if hasattr(strategy, 'should_enter'):
-            df = bullish_flag_dataframe.copy()
-            if hasattr(strategy, 'calculate_indicators'):
-                df = strategy.calculate_indicators(df)
-            
-            result = strategy.should_enter(sample_candidate, df)
-            
-            assert isinstance(result, bool)
-    
-    def test_should_exit(self, strategy, bullish_flag_dataframe, sample_candidate):
-        """Test should_exit method."""
-        if hasattr(strategy, 'should_exit'):
-            df = bullish_flag_dataframe.copy()
-            if hasattr(strategy, 'calculate_indicators'):
-                df = strategy.calculate_indicators(df)
-            
-            result = strategy.should_exit(sample_candidate, df)
-            
-            assert isinstance(result, bool)
-    
-    def test_generate_signal(self, strategy, bullish_flag_dataframe, sample_candidate):
-        """Test generate_signal method."""
-        if hasattr(strategy, 'generate_signal'):
-            df = bullish_flag_dataframe.copy()
-            if hasattr(strategy, 'calculate_indicators'):
-                df = strategy.calculate_indicators(df)
-            
-            signal = strategy.generate_signal(sample_candidate, df)
-            
-            # Should return Signal or None
-            assert signal is None or isinstance(signal, Signal)
+    def test_detect_flag_pattern_insufficient_data(self, strategy):
+        """Test pattern detection with insufficient data."""
+        short_df = pd.DataFrame({
+            'open': [100, 101, 102],
+            'high': [101, 102, 103],
+            'low': [99, 100, 101],
+            'close': [100.5, 101.5, 102.5],
+            'volume': [100000, 110000, 120000]
+        })
+        
+        detected, flag_high, flag_low = strategy.detect_flag_pattern(short_df)
+        
+        assert detected is False
 
 
 class TestBullishFlagPatternDetection:
-    """Test bullish flag pattern detection logic."""
+    """Test flag pattern detection logic."""
     
     @pytest.fixture
-    def strategy(self):
-        """Create strategy instance."""
-        return BullishFlagStrategy()
-    
-    def test_pole_detection(self, strategy):
-        """Test detection of pole (strong upward move)."""
-        dates = pd.date_range(start='2024-01-01', periods=30, freq='5T')
-        
-        # Strong upward move (pole)
-        close = np.linspace(100, 130, 30)  # 30% gain
-        
-        df = pd.DataFrame({
-            'open': close * 0.998,
-            'high': close * 1.01,
-            'low': close * 0.99,
-            'close': close,
-            'volume': np.full(30, 100000)
-        }, index=dates)
-        
-        # Strategy should recognize this as potential pole
-        if hasattr(strategy, 'calculate_indicators'):
-            df = strategy.calculate_indicators(df)
-        
-        assert isinstance(df, pd.DataFrame)
-    
-    def test_flag_consolidation(self, strategy):
-        """Test detection of flag consolidation."""
-        dates = pd.date_range(start='2024-01-01', periods=40, freq='5T')
-        
-        # Consolidation with slight downward slope
-        np.random.seed(42)
-        close = 120 - np.linspace(0, 5, 40) + np.random.randn(40) * 0.5
-        
-        df = pd.DataFrame({
-            'open': close * 0.998,
-            'high': close * 1.01,
-            'low': close * 0.99,
-            'close': close,
-            'volume': np.full(40, 30000)  # Lower volume during consolidation
-        }, index=dates)
-        
-        if hasattr(strategy, 'calculate_indicators'):
-            df = strategy.calculate_indicators(df)
-        
-        assert isinstance(df, pd.DataFrame)
-    
-    def test_volume_pattern(self, strategy):
-        """Test volume pattern recognition."""
-        dates = pd.date_range(start='2024-01-01', periods=50, freq='5T')
-        
-        close = np.concatenate([
-            np.linspace(100, 120, 20),  # Pole
-            np.linspace(120, 118, 30)   # Flag
-        ])
-        
-        volume = np.concatenate([
-            np.full(20, 100000),  # High volume during pole
-            np.full(30, 30000)   # Low volume during flag
-        ])
-        
-        df = pd.DataFrame({
-            'open': close * 0.998,
-            'high': close * 1.01,
-            'low': close * 0.99,
-            'close': close,
-            'volume': volume
-        }, index=dates)
-        
-        if hasattr(strategy, 'calculate_indicators'):
-            df = strategy.calculate_indicators(df)
-        
-        assert isinstance(df, pd.DataFrame)
-
-
-class TestBullishFlagEdgeCases:
-    """Test edge cases for Bullish Flag Strategy."""
+    def config(self):
+        return BullishFlagConfig()
     
     @pytest.fixture
-    def strategy(self):
-        """Create strategy instance."""
-        return BullishFlagStrategy()
+    def strategy(self, config):
+        return BullishFlagStrategy(config)
     
-    def test_empty_dataframe(self, strategy):
-        """Test strategy handles empty dataframe."""
-        df = pd.DataFrame()
+    def test_detects_pattern_with_valid_pole(self, strategy):
+        """Test detection of valid bullish flag pattern."""
+        # Create data with a clear flag pole (strong upward move)
+        n = 25
         
-        if hasattr(strategy, 'calculate_indicators'):
-            result = strategy.calculate_indicators(df)
-            assert isinstance(result, pd.DataFrame)
-    
-    def test_insufficient_data(self, strategy):
-        """Test strategy handles insufficient data."""
-        df = pd.DataFrame({
-            'open': [100, 101],
-            'high': [101, 102],
-            'low': [99, 100],
-            'close': [100, 101],
-            'volume': [10000, 20000]
-        }, index=pd.date_range(start='2024-01-01', periods=2, freq='5T'))
+        # Start with flat prices
+        base = [100.0] * 5
         
-        if hasattr(strategy, 'calculate_indicators'):
-            result = strategy.calculate_indicators(df)
-            assert isinstance(result, pd.DataFrame)
-    
-    def test_bearish_pattern_not_detected(self, strategy):
-        """Test bearish pattern is not detected as bullish flag."""
-        dates = pd.date_range(start='2024-01-01', periods=50, freq='5T')
+        # Flag pole: +3% move over 3 candles
+        pole = [100.0, 101.5, 103.0]
         
-        # Bearish pattern (inverted flag)
-        close = np.concatenate([
-            np.linspace(100, 80, 20),   # Downward pole
-            np.linspace(80, 82, 30)     # Consolidation
-        ])
+        # Consolidation: slight pullback over 3 candles
+        consolidation = [102.5, 102.3, 102.8]
+        
+        # Breakout: price breaks above consolidation high
+        breakout = [103.5, 104.0, 104.5]
+        
+        # Pad with more data
+        padding = [104.5 + 0.1 * i for i in range(n - len(base) - len(pole) - len(consolidation) - len(breakout))]
+        
+        all_close = base + pole + consolidation + breakout + padding
         
         df = pd.DataFrame({
-            'open': close * 1.002,
-            'high': close * 1.01,
-            'low': close * 0.99,
-            'close': close,
-            'volume': np.full(50, 50000)
-        }, index=dates)
+            'open': [c - 0.3 for c in all_close],
+            'high': [c + 0.5 for c in all_close],
+            'low': [c - 0.5 for c in all_close],
+            'close': all_close,
+            'volume': [100000] * len(all_close)
+        })
         
-        candidate = Candidate(
-            symbol="TEST",
-            instrument_token=12345,
-            current_price=82.0,
-            open_price=100.0,
-            high_price=100.0,
-            low_price=80.0,
-            volume=50000,
-            gain_pct=-18.0,
-            timestamp=datetime.now()
-        )
+        # The pattern may or may not be detected depending on exact config values
+        # Main test is that it doesn't crash
+        detected, flag_high, flag_low = strategy.detect_flag_pattern(df)
         
-        if hasattr(strategy, 'should_enter'):
-            df_with_indicators = strategy.calculate_indicators(df.copy()) if hasattr(strategy, 'calculate_indicators') else df
-            result = strategy.should_enter(candidate, df_with_indicators)
-            # Should not generate entry signal for bearish pattern
-            assert isinstance(result, bool)
+        assert isinstance(detected, bool)
+        if detected:
+            assert flag_high is not None
+            assert flag_low is not None
     
-    def test_nan_values_handling(self, strategy):
-        """Test strategy handles NaN values."""
-        df = pd.DataFrame({
-            'open': [100, np.nan, 102, 103, 104],
-            'high': [101, 102, np.nan, 104, 105],
-            'low': [99, 100, 101, np.nan, 103],
-            'close': [100, 101, 102, 103, np.nan],
-            'volume': [10000, 20000, 30000, 40000, 50000]
-        }, index=pd.date_range(start='2024-01-01', periods=5, freq='5T'))
-        
-        if hasattr(strategy, 'calculate_indicators'):
-            result = strategy.calculate_indicators(df)
-            assert isinstance(result, pd.DataFrame)
-    
-    def test_very_long_pole(self, strategy):
-        """Test flag pattern with very long pole."""
-        dates = pd.date_range(start='2024-01-01', periods=100, freq='5T')
-        
-        # Very long pole with small flag
-        close = np.concatenate([
-            np.linspace(100, 200, 80),  # Long pole
-            np.linspace(200, 195, 20)   # Short flag
-        ])
+    def test_no_pattern_in_flat_data(self, strategy):
+        """Test no pattern detected in flat price data."""
+        n = 30
+        flat_close = [100.0] * n
         
         df = pd.DataFrame({
-            'open': close * 0.998,
-            'high': close * 1.01,
-            'low': close * 0.99,
-            'close': close,
-            'volume': np.full(100, 50000)
-        }, index=dates)
+            'open': flat_close,
+            'high': [c + 0.1 for c in flat_close],
+            'low': [c - 0.1 for c in flat_close],
+            'close': flat_close,
+            'volume': [100000] * n
+        })
         
-        if hasattr(strategy, 'calculate_indicators'):
-            result = strategy.calculate_indicators(df)
-            assert isinstance(result, pd.DataFrame)
+        detected, flag_high, flag_low = strategy.detect_flag_pattern(df)
+        
+        # Flat data shouldn't have a flag pole
+        assert detected is False
 
 
 class TestBullishFlagConfig:
-    """Test Bullish Flag configuration."""
+    """Test BullishFlagConfig integration."""
     
-    def test_strategy_has_config(self):
-        """Test strategy has configuration."""
-        strategy = BullishFlagStrategy()
+    def test_config_default_values(self):
+        """Test default config values."""
+        config = BullishFlagConfig()
         
-        # Strategy should have some form of configuration
-        assert strategy is not None
+        assert config.name == "Bullish Flag Momentum"
+        assert config.min_initial_move_pct > 0
+        assert config.target_pct > 0
+        assert config.stop_loss_pct > 0
     
-    def test_default_values_are_reasonable(self):
-        """Test default configuration values are reasonable."""
-        strategy = BullishFlagStrategy()
+    def test_config_custom_values(self):
+        """Test custom config values."""
+        config = BullishFlagConfig(
+            min_initial_move_pct=3.0,
+            target_pct=2.5,
+            stop_loss_pct=1.2
+        )
         
-        if hasattr(strategy, 'config'):
-            config = strategy.config
-            # Verify config has reasonable defaults
-            if hasattr(config, 'min_pole_pct'):
-                assert config.min_pole_pct > 0
-            if hasattr(config, 'max_flag_retracement'):
-                assert 0 < config.max_flag_retracement < 1
+        assert config.min_initial_move_pct == 3.0
+        assert config.target_pct == 2.5
+        assert config.stop_loss_pct == 1.2
+    
+    def test_strategy_with_custom_config(self):
+        """Test strategy uses custom config values."""
+        config = BullishFlagConfig(
+            min_initial_move_pct=3.5,
+            volume_multiplier=1.5
+        )
+        
+        strategy = BullishFlagStrategy(config)
+        
+        assert strategy.config.min_initial_move_pct == 3.5
+        assert strategy.config.volume_multiplier == 1.5

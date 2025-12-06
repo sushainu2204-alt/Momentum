@@ -76,7 +76,7 @@ class TopGainersWorker:
         
         # Initialize components
         self.data_source = ZerodhaDataSource(kite)
-        self.universe = UniverseFactory.create('fno')
+        self.universe = UniverseFactory.create('nifty500')
         self.screener = StockScreenerService(self.data_source, self.universe, self.config)
         self.strategy = TopGainersMomentumStrategy(self.config)
         self.position_manager = PositionManagerService(self.config)
@@ -495,7 +495,7 @@ class TopGainersWorker:
         logger.info("🚀 TOP GAINERS MOMENTUM WORKER STARTING")
         logger.info("="*70)
         logger.info(f"Strategy: {self.config.name}")
-        logger.info(f"Universe: FnO stocks")
+        logger.info(f"Universe: Nifty 500 stocks")
         logger.info(f"Scan Interval: 1 minute")
         logger.info("="*70 + "\n")
         
