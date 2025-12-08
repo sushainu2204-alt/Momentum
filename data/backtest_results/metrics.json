@@ -1,0 +1,42 @@
+{
+  "basic": {
+    "start_date": "None",
+    "end_date": "None",
+    "trading_days": 0,
+    "total_trades": 0
+  },
+  "capital": {
+    "initial": 0.0,
+    "final": 0.0,
+    "peak": 0.0
+  },
+  "returns": {
+    "total_return": 0.0,
+    "total_return_pct": 0.0,
+    "cagr": 0.0,
+    "avg_daily_return": 0.0,
+    "best_day": 0.0,
+    "worst_day": 0.0
+  },
+  "risk": {
+    "max_drawdown_pct": 0.0,
+    "max_drawdown_amount": 0.0,
+    "volatility_annual": 0.0,
+    "var_95": 0.0
+  },
+  "risk_adjusted": {
+    "sharpe_ratio": 0.0,
+    "sortino_ratio": 0.0,
+    "calmar_ratio": 0.0
+  },
+  "trades": {
+    "winning": 0,
+    "losing": 0,
+    "win_rate": 0.0,
+    "profit_factor": 0.0,
+    "expectancy": 0.0,
+    "sqn": 0.0
+  },
+  "by_strategy": {},
+  "exits": {}
+}

@@ -22,8 +22,14 @@ class OrderRepository:
     
     def __init__(self, database: IDatabase, orders_file_path: Optional[Path] = None):
         self.db = database
-        # Default to data/orders directory
-        self.orders_path = orders_file_path or Path("data/orders")
+        # Default to backend/data/orders directory (relative to project root)
+        # This ensures it works both locally and in Docker containers
+        if orders_file_path:
+            self.orders_path = orders_file_path
+        else:
+            # Get the backend directory (parent of infrastructure)
+            backend_dir = Path(__file__).parent.parent.parent
+            self.orders_path = backend_dir / "data" / "orders"
         self.orders_path.mkdir(parents=True, exist_ok=True)
     
     # ================================================================

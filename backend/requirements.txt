@@ -21,6 +21,11 @@ pytz>=2024.1
 # Job Scheduling
 APScheduler==3.10.4
 
+# Backtesting dependencies
+scipy>=1.11.0
+tqdm>=4.66.0
+pyarrow>=14.0.0
+
 # Database (PostgreSQL support - commented out due to Python 3.13 compatibility)
 # sqlalchemy==2.0.23
 # psycopg2-binary==2.9.9

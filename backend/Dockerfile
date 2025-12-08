@@ -108,9 +108,10 @@ COPY backend/infrastructure/ /app/backend/infrastructure/
 COPY backend/jobs/ /app/backend/jobs/
 COPY backend/workers/ /app/backend/workers/
 COPY backend/data/ /app/backend/data/
+COPY backend/backtest/ /app/backend/backtest/
 
-# Create directories for signals, orders, and logs
-RUN mkdir -p /app/signals /app/orders /app/logs
+# Create directories for signals, orders, logs, and backtest data
+RUN mkdir -p /app/signals /app/orders /app/logs /app/backend/data/orders /app/backtest_data
 
 # Create non-root user for security
 RUN groupadd --gid 1000 appuser && \
