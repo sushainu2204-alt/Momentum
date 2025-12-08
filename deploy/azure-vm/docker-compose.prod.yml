@@ -49,7 +49,7 @@ services:
       - "127.0.0.1:5432:5432"  # Only accessible from localhost
     volumes:
       - pg-data:/var/lib/postgresql/data
-      - ./backend/infrastructure/database/migrations:/docker-entrypoint-initdb.d:ro
+      - ../../backend/infrastructure/database/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-appuser} -d ${POSTGRES_DB:-appdb}"]
       interval: 10s
@@ -64,7 +64,7 @@ services:
   # ---------------------------------------------------------------------------
   backend:
     build:
-      context: .
+      context: ../..
       dockerfile: backend/Dockerfile
       target: production
     container_name: momentum-backend
@@ -95,8 +95,8 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - ../../data:/app/data
+      - ../../logs:/app/logs
       - app-signals:/app/signals
       - app-orders:/app/orders
     healthcheck:

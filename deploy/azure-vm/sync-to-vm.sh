@@ -9,7 +9,8 @@
 # =============================================================================
 
 VM_USER="azureuser"
-VM_IP="172.178.27.229"
+VM_IP="40.81.229.100"
+SSH_KEY="/Users/sushmagollapudi/Downloads/momentum-vm_key.pem"
 LOCAL_PATH="/Users/sushmagollapudi/Momentum/"
 REMOTE_PATH="~/Momentum/"
 
@@ -36,7 +37,7 @@ done
 
 sync_once() {
     echo "🔄 Syncing to $VM_USER@$VM_IP..."
-    eval rsync -avz --progress $EXCLUDE_ARGS "$LOCAL_PATH" "$VM_USER@$VM_IP:$REMOTE_PATH"
+    eval rsync -avz --progress -e \"ssh -i $SSH_KEY\" $EXCLUDE_ARGS "$LOCAL_PATH" "$VM_USER@$VM_IP:$REMOTE_PATH"
     echo "✅ Sync complete!"
 }
 
@@ -51,7 +52,7 @@ sync_watch() {
     
     fswatch -o "$LOCAL_PATH" | while read; do
         echo "$(date '+%H:%M:%S') - Changes detected, syncing..."
-        eval rsync -avz --quiet $EXCLUDE_ARGS "$LOCAL_PATH" "$VM_USER@$VM_IP:$REMOTE_PATH"
+        eval rsync -avz --quiet -e \"ssh -i $SSH_KEY\" $EXCLUDE_ARGS "$LOCAL_PATH" "$VM_USER@$VM_IP:$REMOTE_PATH"
         echo "$(date '+%H:%M:%S') - ✅ Synced"
     done
 }
@@ -60,7 +61,7 @@ sync_and_deploy() {
     sync_once
     echo ""
     echo "🚀 Restarting application on VM..."
-    ssh "$VM_USER@$VM_IP" "cd ~/Momentum && docker-compose -f deploy/azure-vm/docker-compose.prod.yml up -d --build"
+    ssh -i "$SSH_KEY" "$VM_USER@$VM_IP" "cd ~/Momentum && docker-compose -f deploy/azure-vm/docker-compose.prod.yml --env-file .env up -d --build"
     echo "✅ Deployment complete!"
 }
 
